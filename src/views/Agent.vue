@@ -1,807 +1,628 @@
 <template>
-  <div>
-    <div class="stat-grid">
-      <div class="stat-card">
-        <div class="label">服务器总数</div>
-        <div class="value">{{ servers.length }}<span class="unit">台</span></div>
+  <div class="space-y-4">
+    <!-- 顶部页面栏 + 模式切换器 -->
+    <div class="wb-page-head">
+      <div class="wb-page-title-group">
+        <div class="wb-page-title-row">
+          <h1 class="wb-page-title">服务器节点</h1>
+          <div class="wb-mode-switch">
+            <button
+              type="button"
+              :class="['wb-mode-btn', { active: activePane === 'servers' }]"
+              @click="activePane = 'servers'"
+            >
+              Agent 主机 ({{ servers.length }})
+            </button>
+            <button
+              type="button"
+              :class="['wb-mode-btn', { active: activePane === 'sites' }]"
+              @click="activePane = 'sites'"
+            >
+              自动发现站点 ({{ sites.length }})
+            </button>
+          </div>
+        </div>
+        <p class="wb-page-sub">
+          <span>已纳管主机 {{ servers.length }} 台</span>
+          <span class="wb-sep">·</span>
+          <span>在线 {{ onlineCount }} 台</span>
+          <span class="wb-sep">·</span>
+          <span>离线 {{ offlineCount }} 台</span>
+          <span class="wb-sep">·</span>
+          <span>待接管站点 {{ untakenCount }} 个</span>
+        </p>
       </div>
-      <div class="stat-card">
-        <div class="label">当前在线</div>
-        <div class="value">{{ onlineCount }}<span class="unit">台</span></div>
-      </div>
-      <div class="stat-card">
-        <div class="label">发现站点</div>
-        <div class="value">{{ sites.length }}<span class="unit">个</span></div>
-      </div>
-      <div class="stat-card">
-        <div class="label">待接管站点</div>
-        <div class="value">{{ pendingSites }}<span class="unit">个</span></div>
+
+      <div class="wb-page-actions">
+        <button type="button" class="wb-btn" @click="loadAll">
+          <el-icon><Refresh /></el-icon>
+          <span>刷新心跳</span>
+        </button>
+        <button
+          v-if="can('agent:token')"
+          type="button"
+          class="wb-btn wb-btn-primary"
+          @click="openTokenWizard"
+        >
+          <el-icon><Plus /></el-icon>
+          <span>接入新服务器</span>
+        </button>
+        <button type="button" class="wb-btn" @click="toggleFullscreen">
+          <el-icon><FullScreen /></el-icon>
+          <span>{{ isFullscreen ? '退出全屏' : '全屏' }}</span>
+        </button>
       </div>
     </div>
 
-    <div class="page-card">
-      <div class="toolbar">
-        <el-button type="primary" @click="openWizard">添加服务器</el-button>
-        <el-button @click="load">刷新</el-button>
-        <el-button @click="openUpgrade">升级 Agent 脚本</el-button>
-        <span class="tip">Agent 作业采用长轮询（空闲时最多挂起 15 秒）、心跳 60 秒，90 秒无心跳标记离线；最新脚本 Windows/Linux 2.5，配置读写、站点动作与手动扫描需版本 ≥ 2.2</span>
-      </div>
-
-      <el-table :data="servers" v-loading="loading" size="small" empty-text="暂无服务器，点击「添加服务器」接入">
-        <el-table-column prop="name" label="服务器名称" width="160" />
-        <el-table-column prop="hostname" label="主机名" width="150" />
-        <el-table-column prop="ip" label="IP" width="130" />
-        <el-table-column prop="os" label="系统" width="110" />
-        <el-table-column label="Agent 版本" width="120">
+    <!-- 面板 1：服务器 Agent 节点矩阵 -->
+    <div v-if="activePane === 'servers'" class="wb-panel overflow-hidden px-3 pt-1">
+      <el-table v-loading="loading" :data="servers" empty-text="暂未接入任何服务器节点">
+        <el-table-column label="服务器名称 / 主机名" min-width="210">
           <template #default="{ row }">
-            <el-tag :type="needsUpgrade(row) ? 'warning' : 'success'" size="small">
-            v{{ row.agentversion || '未知' }}{{ needsUpgrade(row) ? ' 需升级' : '' }}
-          </el-tag>
+            <div class="font-bold text-[#111827]">{{ row.name }}</div>
+            <div class="mono text-xs text-gray-400 mt-0.5">{{ row.hostname || '—' }}</div>
           </template>
         </el-table-column>
 
-        <el-table-column prop="status" label="状态" width="100">
+        <el-table-column label="IP 与操作系统" min-width="180">
           <template #default="{ row }">
-            <el-tag :type="row.status === 'ONLINE' ? 'success' : 'info'" size="small">
-              {{ row.status === 'ONLINE' ? '在线' : '离线' }}
-            </el-tag>
+            <div class="mono font-medium text-gray-900">{{ row.ip }}</div>
+            <div class="wb-meta mt-0.5">
+              <span class="mono">{{ row.os }}</span>
+              <span class="wb-sep">·</span>
+              <span class="mono">Agent v{{ row.agentversion || '-' }}</span>
+            </div>
           </template>
         </el-table-column>
-        <el-table-column label="最后心跳" width="170">
-          <template #default="{ row }">{{ fmt(row.lastheartbeat) }}</template>
-        </el-table-column>
-        <el-table-column label="操作" width="380" fixed="right">
-          <template #default="{ row }">
-            <el-button link type="primary" size="small" @click="viewSites(row)">查看站点</el-button>
-            <el-button link type="primary" size="small" @click="scanSites(row)">扫描站点</el-button>
-            <el-button link type="primary" size="small" @click="openNewConfig(row)">新增配置</el-button>
-            <el-dropdown trigger="click" @command="(cmd) => serverAction(row, cmd)">
-              <el-button link type="primary" size="small">
-                Nginx 服务<el-icon class="el-icon--right"><ArrowDown /></el-icon>
-              </el-button>
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item command="reload">重载配置（全部站点）</el-dropdown-item>
-                  <el-dropdown-item command="restart">重启 Nginx（全部站点）</el-dropdown-item>
-                  <el-dropdown-item command="stop" divided>停止 Nginx（全部站点）</el-dropdown-item>
-                  <el-dropdown-item command="start">启动 Nginx</el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
-            <el-button link type="danger" size="small" @click="removeServer(row)">删除</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
 
-      <h3 class="page-title" style="margin-top: 24px">
-        站点列表
-        <el-tag v-if="selectedServer" size="small" type="info" style="margin-left: 8px">
-          {{ selectedServer.name || selectedServer.hostname }}
-        </el-tag>
-        <el-button v-if="selectedServer" link type="primary" size="small" @click="selectedServer = null; loadSites()">
-          显示全部
-        </el-button>
-      </h3>
-      <el-table :data="sites" size="small" empty-text="Agent 上线后会自动识别 Nginx 安装路径并扫描站点配置">
-        <el-table-column label="所属服务器" width="140">
-          <template #default="{ row }">{{ serverLabel(row.serverid) }}</template>
-        </el-table-column>
-        <el-table-column prop="name" label="站点" width="180" show-overflow-tooltip />
-        <el-table-column prop="domains" label="域名" min-width="190" show-overflow-tooltip />
-        <el-table-column prop="webserver" label="Web 服务" width="100" />
-        <el-table-column prop="configpath" label="配置文件" min-width="230" show-overflow-tooltip />
-        <el-table-column prop="certpath" label="证书路径" min-width="200" show-overflow-tooltip>
-          <template #default="{ row }">{{ row.certpath || '-' }}</template>
-        </el-table-column>
-        <el-table-column label="接管状态" width="100">
+        <el-table-column label="心跳状态" width="125">
           <template #default="{ row }">
-            <el-tag :type="row.takenover ? 'success' : 'warning'" size="small">
-              {{ row.takenover ? '已接管' : '待接管' }}
-            </el-tag>
+            <span
+              class="wb-state"
+              :class="row.status === 'ONLINE' ? 'wb-state-ok' : 'wb-state-err'"
+            >
+              {{ row.status === 'ONLINE' ? '在线运行' : '心跳离线' }}
+            </span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="170" fixed="right">
+
+        <el-table-column label="最近心跳上报" width="185">
           <template #default="{ row }">
-            <el-button link type="primary" size="small" :disabled="!isNginx(row)" @click="editConfig(row)">
-              编辑配置
-            </el-button>
-            <el-button v-if="!row.takenover" link type="primary" size="small" @click="takeover(row)">接管</el-button>
+            <span class="mono text-xs text-gray-500">{{ formatDate(row.lastheartbeat) }}</span>
+          </template>
+        </el-table-column>
+
+        <el-table-column label="节点操作" width="290" fixed="right" align="right">
+          <template #default="{ row }">
+            <div class="inline-flex items-center gap-2">
+              <button
+                type="button"
+                class="wb-row-btn"
+                :disabled="scanningServerId === row.id"
+                @click="triggerScanSites(row)"
+              >
+                {{ scanningServerId === row.id ? '扫描中...' : '扫描站点' }}
+              </button>
+
+              <el-dropdown
+                v-if="can('agent:action') && row.os !== 'WINDOWS'"
+                trigger="click"
+                @command="(cmd) => runNginxAction(row, cmd)"
+              >
+                <button type="button" class="wb-row-btn">
+                  <span>Nginx 控制</span>
+                  <el-icon><ArrowDown /></el-icon>
+                </button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item command="reload_nginx">平滑重载 (reload_nginx)</el-dropdown-item>
+                    <el-dropdown-item command="restart_nginx">重启服务 (restart_nginx)</el-dropdown-item>
+                    <el-dropdown-item command="start_nginx">启动服务 (start_nginx)</el-dropdown-item>
+                    <el-dropdown-item command="stop_nginx" divided>停止服务 (stop_nginx)</el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+
+              <button
+                type="button"
+                class="wb-row-link"
+                @click="filterByServer(row.id)"
+              >
+                站点
+              </button>
+
+              <button
+                v-if="can('agent:delete')"
+                type="button"
+                class="wb-row-link wb-row-link-danger"
+                @click="removeServer(row)"
+              >
+                移除
+              </button>
+            </div>
           </template>
         </el-table-column>
       </el-table>
     </div>
 
-    <!-- 配置编辑 / 新增 -->
-    <el-dialog
-      v-model="cfgVisible"
-      :title="cfgForm.isNew ? '新增 Nginx 配置' : '在线编辑站点配置'"
-      width="900px"
-      :close-on-click-modal="false"
-    >
-      <el-form label-width="90px" size="small">
-        <el-form-item label="服务器">
-          <el-select v-model="cfgForm.serverId" :disabled="!cfgForm.isNew" style="width: 100%">
-            <el-option
-              v-for="s in servers"
-              :key="s.id"
-              :label="(s.name || s.hostname) + (s.ip ? '（' + s.ip + '）' : '')"
-              :value="s.id"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="配置文件">
-          <el-input v-model="cfgForm.path" placeholder="例如 /etc/nginx/conf.d/example.conf 或 D:\\nginx\\conf\\conf.d\\example.conf" />
-        </el-form-item>
-      </el-form>
-      <el-alert
-        v-if="cfgForm.isNew"
-        type="warning"
-        :closable="false"
-        show-icon
-        title="新增配置会直接写入服务器（目录不存在时自动创建），保存后自动重载 Nginx，请确认路径与语法正确"
-        style="margin-bottom: 12px"
-      />
-      <div class="cfg-toolbar">
-        <el-button v-if="!cfgForm.isNew" size="small" :loading="cfgLoading" @click="loadConfigContent">重新读取</el-button>
-        <span class="cfg-status">{{ jobHint }}</span>
-      </div>
-      <el-input
-        v-model="cfgForm.content"
-        type="textarea"
-        :rows="18"
-        spellcheck="false"
-        class="cfg-editor"
-        placeholder="正在等待 Agent 读取配置..."
-      />
-      <template #footer>
-        <el-button @click="cfgVisible = false">取消</el-button>
-        <el-button :loading="cfgSaving" @click="saveConfig(false)">仅保存</el-button>
-        <el-button type="primary" :loading="cfgSaving" @click="saveConfig(true)">保存并重载</el-button>
-      </template>
-    </el-dialog>
-
-    <!-- 已安装服务器升级 Agent 脚本 -->
-    <el-dialog v-model="upgradeVisible" title="升级 Agent 脚本" width="680px">
-      <el-alert
-        type="info"
-        :closable="false"
-        show-icon
-        title="将保留服务器凭证（不会重复注册），只更新脚本并重启服务"
-      />
-      <div class="upgrade-label">Linux（root）</div>
-      <div class="cmd-box">
-        <div class="mono">{{ upgradeLinux }}</div>
-      </div>
-      <el-button size="small" @click="copyText(upgradeLinux)">复制</el-button>
-
-      <div class="upgrade-label" style="margin-top: 20px">Windows（批处理 .bat，所有 Windows 版本）</div>
-      <div class="upgrade-box">
-        <div class="upgrade-desc">
-          Windows 升级与首次安装使用同一个 install.bat：下载后拷到目标服务器，管理员双击运行即可。脚本会自动检测到已有凭证、跳过注册、仅更新 agent.ps1 并重启。
-          <br/>不需要 schtasks.exe、不需要 certutil.exe、不需要 PowerShell 执行策略。
+    <!-- 面板 2：自动发现的 Web 站点与在线安全编辑 -->
+    <template v-else>
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="wb-tabs">
+          <button
+            type="button"
+            class="wb-tab"
+            :class="{ active: siteTakeFilter === 'ALL' }"
+            @click="siteTakeFilter = 'ALL'"
+          >
+            全部站点
+          </button>
+          <button
+            type="button"
+            class="wb-tab"
+            :class="{ active: siteTakeFilter === 'UNTAKEN' }"
+            @click="siteTakeFilter = 'UNTAKEN'"
+          >
+            待接管 ({{ untakenCount }})
+          </button>
+          <button
+            type="button"
+            class="wb-tab"
+            :class="{ active: siteTakeFilter === 'TAKEN' }"
+            @click="siteTakeFilter = 'TAKEN'"
+          >
+            已纳管
+          </button>
         </div>
-        <div style="margin-top: 10px">
-          <el-button type="primary" size="small" link @click="downloadInstallBat()">
-            <el-icon><ArrowDown /></el-icon> 下载 sslauto-install.bat
-          </el-button>
-        </div>
+
+        <el-select
+          v-model="selectedServerId"
+          placeholder="全部服务器节点"
+          clearable
+          class="wb-pill-select !w-52"
+          @change="loadSites"
+        >
+          <el-option
+            v-for="s in servers"
+            :key="s.id"
+            :value="s.id"
+            :label="`${s.name} (${s.ip})`"
+          />
+        </el-select>
       </div>
 
-      <template #footer>
-        <el-button @click="upgradeVisible = false">关闭</el-button>
-      </template>
-    </el-dialog>
-
-    <!-- 添加服务器三步向导 -->
-    <el-dialog v-model="wizardVisible" title="添加服务器" width="680px">
-      <el-steps :active="step" finish-status="success" align-center style="margin-bottom: 24px">
-        <el-step title="服务器信息" />
-        <el-step title="安装 Agent" />
-        <el-step title="等待连接" />
-      </el-steps>
-
-      <div v-if="step === 0">
-        <el-form label-width="110px">
-          <el-form-item label="服务器名称">
-            <el-input v-model="serverName" placeholder="例如：web-prod-01" />
-          </el-form-item>
-          <el-form-item label="操作系统">
-            <el-radio-group v-model="serverOs">
-              <el-radio-button value="LINUX">Linux</el-radio-button>
-              <el-radio-button value="WINDOWS">Windows</el-radio-button>
-            </el-radio-group>
-          </el-form-item>
-        </el-form>
-      </div>
-
-      <div v-else-if="step === 1">
-        <!-- ============ Windows: download bat + paste token ============ -->
-        <template v-if="serverOs === 'WINDOWS'">
-          <el-alert
-            type="info"
-            :closable="false"
-            show-icon
-            title="Windows 一键安装：下载批处理脚本，在目标服务器上以管理员身份双击运行（令牌 10 分钟内有效且仅可使用一次）"
-          />
-          <div class="windows-install-box">
-            <div class="install-step">
-              <div class="step-num">1</div>
-              <div class="step-body">
-                <div class="step-title">下载安装脚本</div>
-                <div class="step-desc">点击右侧按钮下载 install.bat，保存到本地后拷到目标 Windows 服务器（可用 U 盘、远程桌面、浏览器下载等任意方式）</div>
-                <el-button type="primary" size="small" link @click="downloadInstallBat()" style="margin-top: 8px">
-                  <el-icon><ArrowDown /></el-icon> 下载 sslauto-install.bat
-                </el-button>
+      <div class="wb-panel overflow-hidden px-3 pt-1">
+        <el-table :data="filteredSites" empty-text="当前筛选条件下未发现 Web 站点">
+          <el-table-column label="站点标识 / 所属服务器" min-width="200">
+            <template #default="{ row }">
+              <div class="font-bold text-[#111827]">{{ row.name }}</div>
+              <div class="text-xs text-gray-400 mt-0.5">
+                {{ serverLabel(row.serverid) }} · <span class="mono">{{ row.webserver }}</span>
               </div>
-            </div>
-            <div class="install-step">
-              <div class="step-num">2</div>
-              <div class="step-body">
-                <div class="step-title">获取注册令牌（仅首次安装需要）</div>
-                <div class="step-desc">在 bat 运行过程中会提示你粘贴此令牌，令牌 10 分钟内有效且仅可使用一次</div>
-                <div class="mono token-box">{{ wizardToken }}</div>
-                <el-button size="small" @click="copyCommand" style="margin-top: 6px">复制令牌</el-button>
-              </div>
-            </div>
-            <div class="install-step">
-              <div class="step-num">3</div>
-              <div class="step-body">
-                <div class="step-title">管理员身份运行 bat</div>
-                <div class="step-desc">
-                  1) 在目标服务器上右键 install.bat → 以管理员身份运行<br/>
-                  2) 如果脚本提示"测试连通性失败"，请确认服务器能访问本平台的 {{ origin }}（出站 HTTP 8088 端口，不需要入站端口）<br/>
-                  3) 脚本会自动：连通性测试 → 下载 agent.ps1 → 创建 Startup 自启 → 立即后台拉起 Agent → 等待 8 秒并回显启动日志
-                </div>
-              </div>
-            </div>
-          </div>
-          <el-alert
-            style="margin-top: 12px"
-            type="warning"
-            :closable="false"
-            show-icon
-            title="Agent 日志位于 C:\ProgramData\sslauto-agent\agent.log；不需要 schtasks.exe、不需要 certutil.exe，所有 Windows 版本（Server 2008~2022 / Win7~11）均可使用"
-          />
-        </template>
+            </template>
+          </el-table-column>
 
-        <!-- ============ Linux: 粘贴命令 ============ -->
-        <template v-else>
-          <el-alert
-            type="info"
-            :closable="false"
-            show-icon
-            title="在目标服务器上以 root 执行以下命令（令牌 10 分钟内有效且仅可使用一次）"
-          />
-          <div class="cmd-box">
-            <div class="mono">{{ command }}</div>
-          </div>
-          <el-button type="primary" size="small" @click="copyCommand">复制命令</el-button>
-          <el-alert
-            style="margin-top: 16px"
-            type="warning"
-            :closable="false"
-            show-icon
-            title="请确保服务器可访问本平台地址；脚本会自动安装 systemd 服务，Agent 启动后自动识别 Nginx 安装路径"
-          />
-        </template>
-      </div>
+          <el-table-column label="监听域名 (server_name)" min-width="210">
+            <template #default="{ row }">
+              <span class="mono text-xs text-gray-800">{{ formatSiteDomains(row.domains) }}</span>
+            </template>
+          </el-table-column>
 
-      <div v-else>
-        <div class="waiting">
-          <el-icon class="is-loading" :size="22"><Loading /></el-icon>
-          <span>等待服务器连接...（Agent 启动后约 10 秒内完成注册）</span>
-        </div>
-        <el-table v-if="newServers.length" :data="newServers" size="small" style="margin-top: 16px">
-          <el-table-column prop="name" label="名称" />
-          <el-table-column prop="ip" label="IP" />
-          <el-table-column prop="status" label="状态">
-            <template #default>
-              <el-tag type="success" size="small">已连接</el-tag>
+          <el-table-column label="配置文件与当前证书位置" min-width="260">
+            <template #default="{ row }">
+              <div class="mono text-xs text-gray-700 break-all">配置：{{ row.configpath }}</div>
+              <div class="mono text-xs text-gray-400 mt-0.5 break-all">证书：{{ row.certpath || '—' }}</div>
+            </template>
+          </el-table-column>
+
+          <el-table-column label="纳管状态" width="120">
+            <template #default="{ row }">
+              <span
+                class="wb-state"
+                :class="row.takenover === 1 ? 'wb-state-ok' : 'wb-state-warn'"
+              >
+                {{ row.takenover === 1 ? '已接管' : '未接管' }}
+              </span>
+            </template>
+          </el-table-column>
+
+          <el-table-column label="最近扫描时间" width="175">
+            <template #default="{ row }">
+              <span class="mono text-xs text-gray-400">{{ formatDate(row.updatedat) }}</span>
+            </template>
+          </el-table-column>
+
+          <el-table-column label="操作" width="220" fixed="right" align="right">
+            <template #default="{ row }">
+              <div class="inline-flex items-center gap-2">
+                <button
+                  v-if="row.takenover === 0 && can('agent:takeover')"
+                  type="button"
+                  class="wb-row-btn"
+                  @click="takeoverSite(row)"
+                >
+                  一键接管
+                </button>
+                <button
+                  v-if="String(row.webserver).toLowerCase() === 'nginx' && can('agent:config')"
+                  type="button"
+                  class="wb-row-btn"
+                  :disabled="readingSiteId === row.id"
+                  @click="openConfigEditor(row)"
+                >
+                  {{ readingSiteId === row.id ? '读取中...' : '在线配置与回滚' }}
+                </button>
+              </div>
             </template>
           </el-table-column>
         </el-table>
       </div>
+    </template>
+
+    <!-- 接入新服务器 Agent 弹窗 -->
+    <el-dialog v-model="tokenVisible" title="接入新服务器 Agent (一键安装引导)" width="620px">
+      <div class="space-y-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-gray-700 mb-1.5">目标操作系统</label>
+            <div class="wb-mode-switch w-full flex">
+              <button
+                type="button"
+                class="wb-mode-btn flex-1 justify-center"
+                :class="{ active: tokenForm.os === 'LINUX' }"
+                @click="tokenForm.os = 'LINUX'"
+              >
+                Linux (Nginx)
+              </button>
+              <button
+                type="button"
+                class="wb-mode-btn flex-1 justify-center"
+                :class="{ active: tokenForm.os === 'WINDOWS' }"
+                @click="tokenForm.os = 'WINDOWS'"
+              >
+                Windows (IIS)
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-gray-700 mb-1.5">服务器备注名称</label>
+            <div class="flex gap-2">
+              <el-input v-model="tokenForm.serverName" placeholder="例如：华南接入层-Nginx03" />
+              <button
+                type="button"
+                class="wb-btn wb-btn-primary"
+                :disabled="creatingToken"
+                @click="generateToken"
+              >
+                {{ creatingToken ? '生成中...' : '生成命令' }}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="tokenResult" class="space-y-3 pt-3 border-t border-[#f1f3f6]">
+          <div class="wb-meta">
+            <span>一次性注册令牌：<strong class="mono text-gray-900">{{ tokenResult.token }}</strong></span>
+            <span class="wb-sep">·</span>
+            <span>有效期至：<span class="mono">{{ formatDate(tokenResult.expiresAt) }}</span></span>
+          </div>
+
+          <div>
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-xs font-semibold text-gray-700">在目标服务器以管理员权限执行以下一键安装命令：</span>
+              <button
+                type="button"
+                class="wb-row-link"
+                @click="copyToClipboard(tokenResult.command, '安装命令已复制')"
+              >
+                复制命令
+              </button>
+            </div>
+            <pre class="mono text-xs bg-[#18181b] text-gray-100 p-3.5 rounded-xl overflow-x-auto whitespace-pre-wrap break-all">{{ tokenResult.command }}</pre>
+          </div>
+
+          <div
+            v-if="tokenForm.os === 'WINDOWS'"
+            class="flex items-center justify-between bg-[#f7f8fa] border border-[#eceef2] rounded-xl p-3 text-xs"
+          >
+            <span class="text-gray-600">兼容旧版 Windows Server 2008 R2 / 2012 环境？可下载图形化批处理安装脚本：</span>
+            <button
+              type="button"
+              class="wb-row-btn"
+              @click="download('/agent/installBat', 'sslauto-install.bat')"
+            >
+              下载 sslauto-install.bat
+            </button>
+          </div>
+        </div>
+      </div>
 
       <template #footer>
-        <el-button v-if="step > 0" @click="step--">上一步</el-button>
-        <el-button v-if="step === 0" type="primary" :loading="creatingToken" @click="createToken">下一步</el-button>
-        <el-button v-if="step === 1" type="primary" @click="startWaiting">我已在服务器执行</el-button>
-        <el-button v-if="step === 2" @click="finishWizard">完成</el-button>
+        <button type="button" class="wb-btn" @click="tokenVisible = false">完成并关闭</button>
+      </template>
+    </el-dialog>
+
+    <!-- 在线 Nginx 配置编辑弹窗 -->
+    <el-dialog
+      v-model="cfgVisible"
+      :title="`在线编辑站点配置 — ${cfgSite?.configpath || ''}`"
+      width="740px"
+    >
+      <div class="space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-2 text-xs bg-[#f7f8fa] border border-[#eceef2] rounded-xl px-3.5 py-2.5 text-gray-600">
+          <span>
+            事务安全保护：Agent 写入前自动备份原 <code class="mono">.conf</code> 文件；写入后立即执行 <code class="mono">nginx -t</code>，若语法报错自动回滚原备份。
+          </span>
+          <el-checkbox v-model="cfgReload">保存校验通过后自动平滑 reload Nginx</el-checkbox>
+        </div>
+
+        <el-input
+          v-model="cfgContent"
+          type="textarea"
+          :rows="15"
+          class="mono text-xs"
+          placeholder="# Nginx server configuration"
+        />
+      </div>
+
+      <template #footer>
+        <button type="button" class="wb-btn" @click="cfgVisible = false">取消</button>
+        <button
+          type="button"
+          class="wb-btn wb-btn-primary ml-2"
+          :disabled="writingConfig"
+          @click="saveConfig"
+        >
+          {{ writingConfig ? '正在下发...' : `下发事务写入${cfgReload ? '并平滑重载' : ''}` }}
+        </button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Loading, ArrowDown } from '@element-plus/icons-vue'
-import { api } from '../api'
-import { formatDate } from '../utils'
+import { Plus, Refresh, ArrowDown, FullScreen } from '@element-plus/icons-vue'
+import { call, download } from '../api'
+import { can } from '../store'
+import {
+  parseDomains,
+  formatDate,
+  copyToClipboard,
+  isFullscreen,
+  toggleFullscreen
+} from '../utils'
 
+const loading = ref(false)
+const activePane = ref('servers')
 const servers = ref([])
 const sites = ref([])
-const loading = ref(false)
-const selectedServer = ref(null)
-const wizardVisible = ref(false)
-const step = ref(0)
-const serverName = ref('')
-const serverOs = ref('LINUX')
-const command = ref('')
-const wizardToken = ref('')
-const upgradeVisible = ref(false)
-const origin = window.location.origin
-const upgradeLinux = 'curl -fsSL ' + origin + '/api/agent/install.sh | sudo bash -'
+const selectedServerId = ref(null)
+const siteTakeFilter = ref('ALL')
+
+const scanningServerId = ref(null)
+const readingSiteId = ref(null)
+
+const tokenVisible = ref(false)
 const creatingToken = ref(false)
-const newServers = ref([])
-let pollTimer = null
+const tokenResult = ref(null)
+const tokenForm = reactive({
+  os: 'LINUX',
+  serverName: ''
+})
 
 const cfgVisible = ref(false)
-const cfgLoading = ref(false)
-const cfgSaving = ref(false)
-const cfgForm = ref({ isNew: true, siteId: null, serverId: null, path: '', content: '' })
-const jobHint = ref('')
+const writingConfig = ref(false)
+const cfgSite = ref(null)
+const cfgContent = ref('')
+const cfgReload = ref(true)
 
 const onlineCount = computed(() => servers.value.filter((s) => s.status === 'ONLINE').length)
-const pendingSites = computed(() => sites.value.filter((s) => !s.takenover).length)
+const offlineCount = computed(() => servers.value.filter((s) => s.status !== 'ONLINE').length)
+const untakenCount = computed(() => sites.value.filter((s) => s.takenover === 0).length)
 
-const fmt = formatDate
+const filteredSites = computed(() => {
+  return sites.value.filter((s) => {
+    if (siteTakeFilter.value === 'UNTAKEN' && s.takenover !== 0) return false
+    if (siteTakeFilter.value === 'TAKEN' && s.takenover !== 1) return false
+    return true
+  })
+})
 
-function serverLabel(id) {
-  const s = servers.value.find((x) => x.id === id)
-  return s ? s.name || s.hostname : 'ID ' + id
+function serverLabel(serverId) {
+  const s = servers.value.find((x) => x.id === serverId)
+  return s ? s.name : `Server #${serverId}`
 }
 
-function isNginx(row) {
-  return String(row.webserver || '').toLowerCase() === 'nginx'
+function formatSiteDomains(raw) {
+  const arr = parseDomains(raw)
+  return arr.length ? arr.join(', ') : raw || '-'
 }
 
-/** Agent 版本低于 2.2 时不支持受限的配置读写（白名单目录）与站点动作 */
-function needsUpgrade(row) {
-  return !(Number(row.agentversion || 0) >= 2.2)
-}
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
-/** 轮询作业结果，直到成功/失败或超时 */
-async function pollJob(jobId, timeoutMs = 25000) {
-  const start = Date.now()
-  while (Date.now() - start < timeoutMs) {
-    try {
-      const job = await api('/agent/job?id=' + jobId)
-      jobHint.value = '作业状态：' + (job.status === 'PENDING' ? '等待 Agent 拉取' : job.status === 'PROCESSING' ? 'Agent 执行中' : job.status)
-      if (job.status === 'SUCCESS' || job.status === 'FAILED') return job
-    } catch (e) {
-      return { status: 'FAILED', message: e.message }
+async function pollAgentJob(jobId, maxAttempts = 20) {
+  for (let i = 0; i < maxAttempts; i++) {
+    const job = await call('/agent/job?id=' + jobId)
+    if (job.status === 'SUCCESS') return job
+    if (job.status === 'FAILED') {
+      throw new Error(job.message || 'Agent 作业执行失败')
     }
-    await sleep(1500)
+    await new Promise((r) => setTimeout(r, 900))
   }
-  return { status: 'FAILED', message: '等待 Agent 响应超时，请确认服务器在线（Agent 长轮询空闲时最多挂起 15 秒，心跳 60 秒）；若 Agent 版本为 1.x/2.2，请先在「升级 Agent 脚本」执行升级' }
+  throw new Error('等待 Agent 执行响应超时')
 }
 
-async function load() {
+async function loadServers() {
+  try {
+    servers.value = (await call('/agent/servers')) || []
+  } catch {
+    // handled in call()
+  }
+}
+
+async function loadSites() {
+  try {
+    const q = selectedServerId.value ? `?serverId=${selectedServerId.value}` : ''
+    sites.value = (await call('/agent/sites' + q)) || []
+  } catch {
+    // handled in call()
+  }
+}
+
+async function loadAll() {
   loading.value = true
   try {
-    servers.value = await api('/agent/servers')
-    await loadSites()
+    await Promise.all([loadServers(), loadSites()])
   } finally {
     loading.value = false
   }
 }
 
-async function loadSites() {
-  const query = selectedServer.value ? '?serverId=' + selectedServer.value.id : ''
-  sites.value = await api('/agent/sites' + query)
-}
-
-function viewSites(row) {
-  selectedServer.value = row
+function filterByServer(serverId) {
+  selectedServerId.value = serverId
+  activePane.value = 'sites'
   loadSites()
 }
 
-function openWizard() {
-  step.value = 0
-  serverName.value = ''
-  serverOs.value = 'LINUX'
-  command.value = ''
-  newServers.value = []
-  wizardVisible.value = true
+async function triggerScanSites(server) {
+  scanningServerId.value = server.id
+  try {
+    const jobId = await call('/agent/scanSites', {
+      method: 'POST',
+      body: { serverId: server.id }
+    })
+    const res = await pollAgentJob(jobId)
+    ElMessage.success(res.message || '站点扫描已完成并同步')
+    await loadSites()
+  } catch (e) {
+    if (e?.message) ElMessage.error(e.message)
+  } finally {
+    scanningServerId.value = null
+  }
 }
 
-async function createToken() {
-  if (!serverName.value.trim()) {
-    ElMessage.warning('请输入服务器名称')
-    return
+async function runNginxAction(server, action) {
+  await ElMessageBox.confirm(
+    `Nginx 服务控制动作「${action}」将对服务器「${server.name} (${server.ip})」上的全部站点生效，确认继续吗？`,
+    '服务器级服务操作确认',
+    { type: 'warning', confirmButtonText: '确认下发', cancelButtonText: '取消' }
+  )
+  try {
+    const jobId = await call('/agent/siteAction', {
+      method: 'POST',
+      body: { serverId: server.id, action }
+    })
+    const res = await pollAgentJob(jobId)
+    ElMessage.success(res.message || `已成功执行 ${action}`)
+  } catch (e) {
+    if (e?.message) ElMessage.error(e.message)
   }
+}
+
+async function removeServer(server) {
+  await ElMessageBox.confirm(
+    `移除服务器「${server.name}」将同时清理其下已上报的站点与自动部署任务，确认继续吗？`,
+    '移除服务器确认',
+    { type: 'warning', confirmButtonText: '确认移除', cancelButtonText: '取消' }
+  )
+  try {
+    await call('/agent/deleteServer', {
+      method: 'POST',
+      body: { id: server.id }
+    })
+    ElMessage.success('服务器已移除')
+    await loadAll()
+  } catch {
+    // handled in call()
+  }
+}
+
+function openTokenWizard() {
+  tokenForm.os = 'LINUX'
+  tokenForm.serverName = ''
+  tokenResult.value = null
+  tokenVisible.value = true
+}
+
+async function generateToken() {
   creatingToken.value = true
   try {
-    const data = await api('/agent/createToken', { method: 'POST', body: { serverName: serverName.value.trim(), os: serverOs.value } })
-    command.value = data.command || ''
-    wizardToken.value = data.token || ''
-    step.value = 1
-  } catch (e) {
-    ElMessage.error(e.message)
+    tokenResult.value = await call('/agent/createToken', {
+      method: 'POST',
+      body: {
+        serverName: tokenForm.serverName.trim() || undefined,
+        os: tokenForm.os
+      }
+    })
+    ElMessage.success('一次性注册令牌已生成')
+  } catch {
+    // handled in call()
   } finally {
     creatingToken.value = false
   }
 }
 
-async function copyCommand() {
+async function takeoverSite(site) {
   try {
-    await navigator.clipboard.writeText(command.value)
-    ElMessage.success('已复制')
-  } catch (e) {
-    ElMessage.warning('复制失败，请手动选择文本复制')
+    await call('/agent/takeoverSite', {
+      method: 'POST',
+      body: { siteId: site.id }
+    })
+    ElMessage.success(`站点「${site.name}」已纳入平台接管`)
+    await loadSites()
+  } catch {
+    // handled in call()
   }
 }
 
-function startWaiting() {
-  step.value = 2
-  pollConnect()
-}
-
-function openUpgrade() {
-  upgradeVisible.value = true
-}
-
-async function downloadInstallBat() {
-  // Download through fetch + Blob: guarantees real script bytes and lets us
-  // surface an explicit error instead of silently saving a 0-byte .bat file.
-  const url = origin + '/api/agent/installBat'
+async function openConfigEditor(site) {
+  readingSiteId.value = site.id
   try {
-    const resp = await fetch(url, { credentials: 'same-origin' })
-    if (!resp.ok) throw new Error('HTTP ' + resp.status)
-    const text = await resp.text()
-    if (!text || text.length < 200) throw new Error('脚本内容为空（' + text.length + ' 字节）')
-    const blob = new Blob([text], { type: 'application/octet-stream' })
-    const objUrl = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = objUrl
-    a.download = 'sslauto-install.bat'
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    setTimeout(() => URL.revokeObjectURL(objUrl), 2000)
-    ElMessage.success('已下载 sslauto-install.bat（' + blob.size + ' 字节）')
+    const jobId = await call('/agent/config/read', {
+      method: 'POST',
+      body: { siteId: site.id }
+    })
+    const job = await pollAgentJob(jobId)
+    cfgSite.value = site
+    cfgContent.value = job.content || ''
+    cfgReload.value = true
+    cfgVisible.value = true
   } catch (e) {
-    ElMessage.error('下载失败：' + e.message)
-  }
-}
-
-async function copyText(text) {
-  try {
-    await navigator.clipboard.writeText(text)
-    ElMessage.success('已复制')
-  } catch (e) {
-    ElMessage.warning('复制失败，请手动选择文本复制')
-  }
-}
-
-/** 轮询直到目标服务器出现在列表中 */
-async function pollConnect() {
-  clearTimeout(pollTimer)
-  try {
-    const list = await api('/agent/servers')
-    const matched = list.filter((s) => s.name === serverName.value.trim())
-    if (matched.length) {
-      newServers.value = matched
-      servers.value = list
-      ElMessage.success('服务器已连接')
-      return
-    }
-  } catch (e) {
-    /* 忽略，继续轮询 */
-  }
-  pollTimer = setTimeout(pollConnect, 3000)
-}
-
-function finishWizard() {
-  wizardVisible.value = false
-  clearTimeout(pollTimer)
-  load()
-}
-
-async function takeover(row) {
-  try {
-    await api('/agent/takeoverSite', { method: 'POST', body: { siteId: row.id } })
-    ElMessage.success('已接管站点')
-    loadSites()
-  } catch (e) {
-    ElMessage.error(e.message)
-  }
-}
-
-async function removeServer(row) {
-  await ElMessageBox.confirm('删除服务器将同时移除其站点与部署任务，确认？', '提示', { type: 'warning' })
-  try {
-    await api('/agent/deleteServer', { method: 'POST', body: { id: row.id } })
-    ElMessage.success('删除成功')
-    if (selectedServer.value && selectedServer.value.id === row.id) {
-      selectedServer.value = null
-    }
-    load()
-  } catch (e) {
-    ElMessage.error(e.message)
-  }
-}
-
-// ---------------- 配置编辑 ----------------
-async function editConfig(row) {
-  cfgForm.value = { isNew: false, siteId: row.id, serverId: row.serverid, path: row.configpath, content: '' }
-  jobHint.value = ''
-  cfgVisible.value = true
-  await loadConfigContent()
-}
-
-async function loadConfigContent() {
-  cfgLoading.value = true
-  jobHint.value = '正在读取配置...'
-  try {
-    const jobId = await api('/agent/config/read', { method: 'POST', body: { siteId: cfgForm.value.siteId } })
-    const job = await pollJob(jobId)
-    if (job.status === 'SUCCESS') {
-      cfgForm.value.content = job.content || ''
-      jobHint.value = '配置已读取（' + (job.path || cfgForm.value.path) + '）'
-    } else {
-      jobHint.value = '读取失败：' + (job.message || '未知错误')
-      ElMessage.error(jobHint.value)
-    }
-  } catch (e) {
-    jobHint.value = '读取失败：' + e.message
-    ElMessage.error(e.message)
+    if (e?.message) ElMessage.error(e.message)
   } finally {
-    cfgLoading.value = false
+    readingSiteId.value = null
   }
 }
 
-function openNewConfig(server) {
-  const sample = sites.value.find((s) => s.serverid === server.id && isNginx(s))
-  let path = ''
-  if (sample && sample.configpath) {
-    const idx = Math.max(sample.configpath.lastIndexOf('/'), sample.configpath.lastIndexOf('\\'))
-    path = sample.configpath.slice(0, idx + 1) + 'new-site.conf'
-  } else {
-    const isWin = String(server.os || '').toLowerCase().indexOf('win') >= 0
-    path = isWin ? 'C:\\nginx\\conf\\conf.d\\new-site.conf' : '/etc/nginx/conf.d/new-site.conf'
-  }
-  cfgForm.value = {
-    isNew: true,
-    siteId: null,
-    serverId: server.id,
-    path,
-    content: [
-      'server {',
-      '    listen 443 ssl;',
-      '    server_name example.com;',
-      '',
-      '    ssl_certificate     /etc/sslauto/certs/<证书ID>/fullchain.pem;',
-      '    ssl_certificate_key /etc/sslauto/certs/<证书ID>/privkey.pem;',
-      '',
-      '    location / {',
-      '        proxy_pass http://127.0.0.1:8080;',
-      '    }',
-      '}',
-      ''
-    ].join('\n')
-  }
-  jobHint.value = ''
-  cfgVisible.value = true
-}
-
-async function saveConfig(reload) {
-  if (!cfgForm.value.serverId || !cfgForm.value.path || !cfgForm.value.content) {
-    ElMessage.warning('服务器、配置路径与内容均不能为空')
+async function saveConfig() {
+  if (!cfgSite.value) return
+  if (!cfgContent.value.trim()) {
+    ElMessage.warning('配置文件内容不能为空')
     return
   }
-  cfgSaving.value = true
-  jobHint.value = reload ? '正在写入并重载...' : '正在写入...'
+  writingConfig.value = true
   try {
-    const jobId = await api('/agent/config/write', {
+    const jobId = await call('/agent/config/write', {
       method: 'POST',
       body: {
-        siteId: cfgForm.value.siteId,
-        serverId: cfgForm.value.serverId,
-        path: cfgForm.value.path,
-        content: cfgForm.value.content,
-        reload
+        siteId: cfgSite.value.id,
+        content: cfgContent.value,
+        reload: cfgReload.value
       }
     })
-    const job = await pollJob(jobId)
-    if (job.status === 'SUCCESS') {
-      ElMessage.success(reload ? '配置已保存并重载' : '配置已保存')
-      cfgVisible.value = false
-      load()
-    } else {
-      jobHint.value = '保存失败：' + (job.message || '未知错误')
-      ElMessage.error(jobHint.value)
-    }
-  } catch (e) {
-    jobHint.value = '保存失败：' + e.message
-    ElMessage.error(e.message)
-  } finally {
-    cfgSaving.value = false
-  }
-}
-
-// ---------------- 服务器级动作（作用于该服务器上全部站点） ----------------
-const actionLabels = { reload: '重载', restart: '重启', stop: '停止', start: '启动' }
-
-async function scanSites(row) {
-  const loadingMsg = ElMessage({ message: '已通知 Agent 扫描站点，等待结果...', type: 'info', duration: 0 })
-  try {
-    const jobId = await api('/agent/scanSites', { method: 'POST', body: { serverId: row.id } })
-    const job = await pollJob(jobId)
-    if (job.status === 'SUCCESS') {
-      ElMessage.success('站点扫描完成')
-      loadSites()
-    } else {
-      ElMessage.error('扫描失败：' + (job.message || '未知错误'))
-    }
-  } catch (e) {
-    ElMessage.error(e.message)
-  } finally {
-    loadingMsg.close()
-  }
-}
-
-async function serverAction(row, action) {
-  if (action === 'restart' || action === 'stop') {
-    await ElMessageBox.confirm(
-      '将对服务器「' + (row.name || row.hostname) + '」上的 Nginx 执行「' + actionLabels[action]
-      + '」操作，会影响该服务器上的所有站点，确认继续？',
-      '提示',
-      { type: 'warning' }
-    )
-  }
-  const loadingMsg = ElMessage({ message: '已下发「' + actionLabels[action] + '」任务，等待 Agent 执行...', type: 'info', duration: 0 })
-  try {
-    const jobId = await api('/agent/siteAction', { method: 'POST', body: { serverId: row.id, action } })
-    const job = await pollJob(jobId)
-    if (job.status === 'SUCCESS') {
-      ElMessage.success('Nginx ' + actionLabels[action] + '成功')
-    } else {
-      ElMessage.error('执行失败：' + (job.message || '未知错误'))
-    }
-  } catch (e) {
-    ElMessage.error(e.message)
-  } finally {
-    loadingMsg.close()
-  }
-}
-
-// 后台静默刷新，保证 Agent 升级 / 心跳上报后版本与在线状态及时更新
-async function refreshQuiet() {
-  try {
-    servers.value = await api('/agent/servers')
+    const job = await pollAgentJob(jobId)
+    ElMessage.success(job.message || '配置写入并校验通过')
+    cfgVisible.value = false
     await loadSites()
   } catch (e) {
-    /* 忽略轮询失败 */
+    if (e?.message) ElMessage.error(e.message)
+  } finally {
+    writingConfig.value = false
   }
-}
-
-let refreshTimer = null
-function scheduleRefresh() {
-  clearTimeout(refreshTimer)
-  refreshTimer = setTimeout(async () => {
-    await refreshQuiet()
-    scheduleRefresh()
-  }, 30000)
 }
 
 onMounted(() => {
-  load()
-  scheduleRefresh()
-})
-onUnmounted(() => {
-  clearTimeout(pollTimer)
-  clearTimeout(refreshTimer)
+  loadAll()
 })
 </script>
-
-<style scoped>
-.tip {
-  color: #8a919f;
-  font-size: 12px;
-}
-.cmd-box {
-  background: #f5f7fb;
-  border: 1px solid #ebeef5;
-  border-radius: 6px;
-  padding: 14px;
-  margin: 12px 0;
-  user-select: all;
-}
-.windows-install-box {
-  margin: 14px 0 4px;
-}
-.install-step {
-  display: flex;
-  gap: 14px;
-  padding: 14px;
-  background: #fafbfc;
-  border: 1px solid #ebeef5;
-  border-radius: 8px;
-  margin-bottom: 10px;
-}
-.step-num {
-  flex-shrink: 0;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  background: #1677ff;
-  color: #fff;
-  font-weight: 600;
-  font-size: 13px;
-  line-height: 26px;
-  text-align: center;
-}
-.step-body {
-  flex: 1;
-  min-width: 0;
-}
-.step-title {
-  font-weight: 600;
-  font-size: 13px;
-  color: #1f2329;
-  margin-bottom: 4px;
-}
-.step-desc {
-  font-size: 12.5px;
-  color: #5a6373;
-  line-height: 1.65;
-}
-.token-box {
-  margin-top: 8px;
-  background: #fff;
-  border: 1px solid #d9e0ec;
-  border-radius: 5px;
-  padding: 8px 10px;
-  font-size: 13px;
-  word-break: break-all;
-  color: #1677ff;
-  user-select: all;
-}
-.upgrade-box {
-  background: #fafbfc;
-  border: 1px solid #ebeef5;
-  border-radius: 8px;
-  padding: 14px;
-  margin-top: 8px;
-}
-.upgrade-desc {
-  font-size: 12.5px;
-  color: #5a6373;
-  line-height: 1.7;
-}
-.upgrade-label {
-  margin-top: 18px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #1f2329;
-}
-.waiting {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: #1677ff;
-  padding: 16px 0;
-}
-.cfg-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
-}
-.cfg-status {
-  color: #8a919f;
-  font-size: 12px;
-}
-.cfg-editor :deep(.el-textarea__inner) {
-  font-family: Menlo, Consolas, 'Courier New', monospace;
-  font-size: 12.5px;
-  line-height: 1.6;
-  background: #fbfcfe;
-}
-</style>

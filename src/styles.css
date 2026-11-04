@@ -1,126 +1,519 @@
+@import "tailwindcss";
+
+:root {
+  --wb-primary: #18181b;
+  --wb-primary-hover: #27272a;
+  --wb-primary-soft: #f1f3f5;
+  --wb-canvas: #f7f8fa;
+  --wb-sidebar-bg: #fbfbfc;
+  --wb-surface: #ffffff;
+  --wb-surface-subtle: #f8f9fb;
+  --wb-border: #eceef2;
+  --wb-border-strong: #dcdfe6;
+  --wb-text-main: #111827;
+  --wb-text-secondary: #4b5563;
+  --wb-text-muted: #8c95a4;
+  --wb-chart: #1d6bf3;
+  --wb-board-accent: #2563eb;
+
+  --el-color-primary: #18181b;
+  --el-color-primary-light-3: #3f3f46;
+  --el-color-primary-light-5: #71717a;
+  --el-color-primary-light-7: #a1a1aa;
+  --el-color-primary-light-8: #d4d4d8;
+  --el-color-primary-light-9: #f4f4f5;
+  --el-color-primary-dark-2: #09090b;
+  --el-color-success: #16a34a;
+  --el-color-warning: #d97706;
+  --el-color-danger: #dc2626;
+  --el-border-radius-base: 10px;
+  --el-font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  background: #f5f7fb;
-  color: #1f2329;
+  font-family: var(--el-font-family);
+  background: var(--wb-canvas);
+  color: var(--wb-text-main);
+  font-size: 13.5px;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Element Plus 主题色覆盖 */
-.el-button--primary {
-  --el-button-bg-color: #1677ff;
-  --el-button-border-color: #1677ff;
-  --el-button-hover-bg-color: #4096ff;
-  --el-button-hover-border-color: #4096ff;
+h1, h2, h3, h4, .wb-heading {
+  font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+  letter-spacing: -0.015em;
 }
 
-.el-tag {
+.mono,
+code,
+pre {
+  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* =========================================================
+   Page Header Bar (Matches Screenshot 1 & 3 Top Canvas Row)
+   ========================================================= */
+.wb-page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+
+.wb-page-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.wb-page-title-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.wb-page-title {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 700;
+  color: var(--wb-text-main);
+  line-height: 1.25;
+}
+
+.wb-page-sub {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--wb-text-muted);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.wb-page-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* =========================================================
+   Rounded-Full Interactive Buttons (Screenshot 1, 2, 3)
+   ========================================================= */
+.wb-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 34px;
+  padding: 0 15px;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  color: #1f2937;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.16s ease;
+  line-height: 1;
+}
+
+.wb-btn:hover:not(:disabled) {
+  background: #f9fafb;
+  border-color: #d1d5db;
+  color: #111827;
+}
+
+.wb-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.wb-btn-primary {
+  background: var(--wb-primary);
+  border-color: var(--wb-primary);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.wb-btn-primary:hover:not(:disabled) {
+  background: var(--wb-primary-hover);
+  border-color: var(--wb-primary-hover);
+  color: #ffffff;
+}
+
+.wb-btn-accent {
+  background: var(--wb-chart);
+  border-color: var(--wb-chart);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.wb-btn-accent:hover:not(:disabled) {
+  opacity: 0.92;
+  color: #ffffff;
+}
+
+/* Compact Table Row Action Outline Pill (Matches "导出个人PDF" / "个人分析") */
+.wb-row-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 11px;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  color: #374151;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.wb-row-btn:hover:not(:disabled) {
+  border-color: #9ca3af;
+  color: #111827;
+  background: #f9fafb;
+}
+
+.wb-row-btn-danger:hover:not(:disabled) {
+  border-color: #fca5a5;
+  color: #dc2626;
+  background: #fef2f2;
+}
+
+.wb-row-link {
+  border: none;
+  background: transparent;
+  padding: 2px 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #6b7280;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.15s ease;
+}
+
+.wb-row-link:hover {
+  color: #111827;
+}
+
+.wb-row-link-danger:hover {
+  color: #dc2626;
+}
+
+/* =========================================================
+   Rounded-2xl Card System (16px Radius, Crisp 1px Border)
+   ========================================================= */
+.wb-panel {
+  background: var(--wb-surface);
+  border: 1px solid var(--wb-border);
+  border-radius: 16px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.wb-panel-header {
+  padding: 18px 22px 14px;
+  border-bottom: 1px solid #f2f4f7;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.wb-panel-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--wb-text-main);
+  margin: 0;
+}
+
+.wb-panel-sub {
+  font-size: 12px;
+  color: var(--wb-text-muted);
+  margin-top: 2px;
+}
+
+.wb-panel-body {
+  padding: 20px 22px;
+}
+
+/* =========================================================
+   Filter Tabs & Mode Switchers (Screenshot 1 & 3)
+   ========================================================= */
+/* Screenshot 1 Filter Tabs: Active = Solid Primary Pill, Inactive = Clean Text */
+.wb-tabs {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.wb-tab {
+  height: 30px;
+  padding: 0 13px;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.wb-tab:hover {
+  color: #111827;
+  background: #f3f4f6;
+}
+
+.wb-tab.active {
+  background: var(--wb-primary);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+/* Screenshot 3 Mode Switcher: Soft Grey Track + White Active Pill */
+.wb-seg,
+.wb-mode-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  background: #eff1f5;
+  border-radius: 999px;
+}
+
+.wb-seg-btn,
+.wb-mode-btn {
+  border: none;
+  background: transparent;
+  height: 28px;
+  padding: 0 13px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #6b7280;
+  cursor: pointer;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.15s ease;
+}
+
+.wb-seg-btn:hover,
+.wb-mode-btn:hover {
+  color: #111827;
+}
+
+.wb-seg-btn.active,
+.wb-mode-btn.active {
+  background: #ffffff;
+  color: #111827;
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(17, 24, 39, 0.06);
+}
+
+/* Rounded Search Input (Matches Screenshot 1 Filter Search) */
+.wb-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 13px;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  transition: border-color 0.15s ease;
+}
+
+.wb-search:focus-within {
+  border-color: #9ca3af;
+}
+
+.wb-search input {
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 12.5px;
+  color: #111827;
+  width: 100%;
+}
+
+.wb-search input::placeholder {
+  color: #9ca3af;
+}
+
+/* =========================================================
+   Unboxed Metadata & Semantic State Text
+   ========================================================= */
+.wb-meta {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--wb-text-muted);
+}
+
+.wb-sep {
+  color: #d1d5db;
+  user-select: none;
+}
+
+.wb-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.wb-state-ok {
+  color: #16a34a;
+}
+
+.wb-state-warn {
+  color: #d97706;
+}
+
+.wb-state-err {
+  color: #dc2626;
+}
+
+.wb-state-neutral {
+  color: #6b7280;
+}
+
+/* Soft Neutral Role/Category Tag (Matches "学习委员" / "班干部" in Screenshot 1 when needed) */
+.wb-soft-label {
+  display: inline-block;
+  padding: 2px 8px;
   border-radius: 6px;
+  background: #f3f4f6;
+  color: #4b5563;
+  font-size: 11.5px;
+  font-weight: 500;
+}
+
+/* =========================================================
+   Element Plus Ultra-Clean Harmonization (Screenshot 1 & 3)
+   ========================================================= */
+.el-button {
+  font-weight: 500;
+  border-radius: 999px;
+}
+
+.el-input__wrapper,
+.el-select__wrapper {
+  border-radius: 10px !important;
+  box-shadow: 0 0 0 1px #e5e7eb inset !important;
+}
+
+.el-input__wrapper.is-focus,
+.el-select__wrapper.is-focused {
+  box-shadow: 0 0 0 1px var(--wb-primary) inset !important;
+}
+
+.wb-pill-select .el-select__wrapper {
+  border-radius: 999px !important;
+  min-height: 34px !important;
+  font-size: 12.5px !important;
+}
+
+.el-table {
+  --el-table-border-color: #f2f4f7;
+  --el-table-header-bg-color: #ffffff;
+  --el-table-header-text-color: #8c95a4;
+  --el-table-row-hover-bg-color: #fafbfc;
+  --el-table-text-color: #374151;
+  font-size: 13px;
+}
+
+.el-table th.el-table__cell {
+  font-weight: 500;
+  font-size: 12px;
+  padding: 11px 0 !important;
+  border-bottom: 1px solid #f1f3f6 !important;
+}
+
+.el-table td.el-table__cell {
+  padding: 12px 0 !important;
+  border-bottom: 1px solid #f4f5f8 !important;
+}
+
+.el-table__inner-wrapper::before {
+  display: none !important;
 }
 
 .el-dialog {
-  border-radius: 12px;
+  border-radius: 16px !important;
+  border: 1px solid var(--wb-border);
   overflow: hidden;
+  padding: 0 !important;
 }
 
 .el-dialog__header {
-  padding: 16px 20px;
-  border-bottom: 1px solid #ebeef5;
-  margin-right: 0;
+  padding: 18px 24px !important;
+  border-bottom: 1px solid #f1f3f6;
+  margin-right: 0 !important;
+}
+
+.el-dialog__title {
+  font-size: 16px !important;
+  font-weight: 700 !important;
+  color: var(--wb-text-main) !important;
 }
 
 .el-dialog__body {
-  padding: 20px;
+  padding: 20px 24px !important;
 }
 
 .el-dialog__footer {
-  padding: 12px 20px 16px;
-  border-top: 1px solid #f0f2f5;
+  padding: 14px 24px 18px !important;
+  border-top: 1px solid #f1f3f6;
   background: #fafbfc;
 }
 
-/* 页面卡片 */
-.page-card {
-  background: #fff;
-  border-radius: 12px;
-  padding: 20px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-  border: 1px solid #f0f2f5;
-}
-
-.page-title {
-  font-size: 18px;
-  font-weight: 600;
-  margin: 0 0 16px;
-}
-
-/* 统计卡片网格 */
-.stat-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 16px;
-  margin-bottom: 20px;
-}
-
-.stat-card {
-  background: #fff;
-  border-radius: 12px;
-  padding: 20px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-  border: 1px solid #f0f2f5;
-  transition: box-shadow 0.2s, transform 0.2s;
-}
-
-.stat-card:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  transform: translateY(-2px);
-}
-
-.stat-card .label {
-  color: #8a919f;
-  font-size: 13px;
-  margin-bottom: 8px;
-}
-
-.stat-card .value {
-  font-size: 28px;
-  font-weight: 600;
-  color: #1677ff;
-}
-
-.stat-card .unit {
-  font-size: 13px;
-  color: #8a919f;
-  margin-left: 4px;
-}
-
-/* 工具栏 */
-.toolbar {
-  margin-bottom: 16px;
-  display: flex;
-  gap: 12px;
-  align-items: center;
-}
-
-/* 等宽字体类 */
-.mono {
-  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
-  font-size: 12px;
-}
-
-/* 滚动条美化 */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
+
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
 ::-webkit-scrollbar-thumb {
-  background: #d9d9d9;
-  border-radius: 4px;
+  background: #d1d5db;
+  border-radius: 999px;
 }
+
 ::-webkit-scrollbar-thumb:hover {
-  background: #bfbfbf;
+  background: #9ca3af;
 }

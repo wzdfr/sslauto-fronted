@@ -1,0 +1,5 @@
+{
+  "name": "SSLAuto Console",
+  "description": "Automated SSL/TLS certificate lifecycle management, live domain TLS inspection, ACME challenge configuration, and edge deployment console.",
+  "requestFramePermissions": []
+}

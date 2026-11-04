@@ -1,558 +1,703 @@
 <template>
-  <div class="page-card">
-    <el-tabs v-model="tab">
-      <!-- 用户管理 -->
-      <el-tab-pane v-if="can('system:user')" label="用户管理" name="user">
-        <div class="toolbar">
-          <el-button type="primary" @click="openUser()">新建用户</el-button>
-          <el-input
-            v-model="keyword"
-            placeholder="搜索用户名/昵称"
-            clearable
-            style="width: 220px"
+  <div class="space-y-4">
+    <!-- 顶部页面栏 + 模式切换器 -->
+    <div class="wb-page-head">
+      <div class="wb-page-title-group">
+        <div class="wb-page-title-row">
+          <h1 class="wb-page-title">权限与审计</h1>
+          <div class="wb-mode-switch">
+            <button
+              v-if="can('system:user')"
+              type="button"
+              :class="['wb-mode-btn', { active: activeTab === 'users' }]"
+              @click="switchTab('users')"
+            >
+              平台账号
+            </button>
+            <button
+              v-if="can('system:role')"
+              type="button"
+              :class="['wb-mode-btn', { active: activeTab === 'roles' }]"
+              @click="switchTab('roles')"
+            >
+              RBAC 角色矩阵
+            </button>
+            <button
+              v-if="can('system:log')"
+              type="button"
+              :class="['wb-mode-btn', { active: activeTab === 'logs' }]"
+              @click="switchTab('logs')"
+            >
+              操作审计日志
+            </button>
+          </div>
+        </div>
+        <p class="wb-page-sub">
+          <span>多角色细粒度权限治理与全生命周期操作留痕</span>
+        </p>
+      </div>
+
+      <div class="wb-page-actions">
+        <button
+          v-if="activeTab === 'users' && can('system:user')"
+          type="button"
+          class="wb-btn wb-btn-primary"
+          @click="openUserModal()"
+        >
+          <el-icon><Plus /></el-icon>
+          <span>新建账号</span>
+        </button>
+        <button
+          v-if="activeTab === 'roles' && can('system:role')"
+          type="button"
+          class="wb-btn wb-btn-primary"
+          @click="openRoleModal()"
+        >
+          <el-icon><Plus /></el-icon>
+          <span>新建角色</span>
+        </button>
+        <button type="button" class="wb-btn" @click="toggleFullscreen">
+          <el-icon><FullScreen /></el-icon>
+          <span>{{ isFullscreen ? '退出全屏' : '全屏' }}</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Tab 1: 平台账号管理 -->
+    <template v-if="activeTab === 'users' && can('system:user')">
+      <div class="flex items-center gap-3">
+        <div class="wb-search w-64">
+          <el-icon class="text-gray-400"><Search /></el-icon>
+          <input
+            v-model="userKeyword"
+            type="text"
+            placeholder="搜索用户名或显示姓名"
             @keyup.enter="loadUsers"
-            @clear="loadUsers"
           />
-          <el-button @click="loadUsers">搜索</el-button>
-          <span class="tip">超级管理员账号不可禁用或删除；系统至少保留一个超级管理员</span>
         </div>
+        <button type="button" class="wb-btn" @click="loadUsers">查询</button>
+      </div>
 
-        <el-table :data="users" v-loading="loadingUsers" size="small" empty-text="暂无用户">
-          <el-table-column prop="username" label="用户名" width="160" />
-          <el-table-column prop="nickname" label="昵称" width="160" />
-          <el-table-column label="角色" width="150">
+      <div class="wb-panel overflow-hidden px-3 pt-1">
+        <el-table v-loading="loadingUsers" :data="users" empty-text="暂无账号记录">
+          <el-table-column label="登录账号 / 姓名" min-width="200">
             <template #default="{ row }">
-              <el-tag size="small" effect="plain">{{ row.roleName || '未分配' }}</el-tag>
+              <div class="font-bold text-[#111827]">{{ row.nickname || row.username }}</div>
+              <div class="mono text-xs text-gray-400 mt-0.5">@{{ row.username }}</div>
             </template>
           </el-table-column>
-          <el-table-column label="状态" width="100">
+
+          <el-table-column label="绑定角色" min-width="160">
             <template #default="{ row }">
-              <el-tag :type="row.status === 'DISABLED' ? 'info' : 'success'" size="small">
-                {{ row.status === 'DISABLED' ? '已禁用' : '正常' }}
-              </el-tag>
+              <span class="wb-soft-label">{{ row.roleName || '未分配角色' }}</span>
             </template>
           </el-table-column>
+
+          <el-table-column label="账号状态" width="120">
+            <template #default="{ row }">
+              <span
+                class="wb-state"
+                :class="row.status === 'ACTIVE' ? 'wb-state-ok' : 'wb-state-err'"
+              >
+                {{ row.status === 'ACTIVE' ? '正常启用' : '已禁用' }}
+              </span>
+            </template>
+          </el-table-column>
+
           <el-table-column label="创建时间" width="180">
-            <template #default="{ row }">{{ fmt(row.createdat) }}</template>
-          </el-table-column>
-          <el-table-column label="操作" width="200">
             <template #default="{ row }">
-              <el-button link type="primary" size="small" @click="openUser(row)">编辑</el-button>
-              <el-button link type="primary" size="small" @click="openReset(row)">重置密码</el-button>
-              <el-button link type="danger" size="small" @click="removeUser(row)">删除</el-button>
+              <span class="mono text-xs text-gray-400">{{ formatDate(row.createdat) }}</span>
+            </template>
+          </el-table-column>
+
+          <el-table-column label="操作" width="220" fixed="right" align="right">
+            <template #default="{ row }">
+              <div class="inline-flex items-center gap-2">
+                <button type="button" class="wb-row-btn" @click="openUserModal(row)">
+                  编辑
+                </button>
+                <button type="button" class="wb-row-link" @click="openResetPwd(row)">
+                  重置密码
+                </button>
+                <button
+                  v-if="row.username !== 'admin'"
+                  type="button"
+                  class="wb-row-link wb-row-link-danger"
+                  @click="deleteUser(row)"
+                >
+                  删除
+                </button>
+              </div>
             </template>
           </el-table-column>
         </el-table>
-      </el-tab-pane>
+      </div>
+    </template>
 
-      <!-- 角色管理 -->
-      <el-tab-pane v-if="can('system:role')" label="角色管理" name="role">
-        <div class="toolbar">
-          <el-button type="primary" @click="openRole()">新建角色</el-button>
-          <el-button @click="loadRoles">刷新</el-button>
-          <span class="tip">角色决定可见菜单；内置超级管理员不可删除</span>
-        </div>
+    <!-- Tab 2: RBAC 角色与权限矩阵 -->
+    <div v-if="activeTab === 'roles' && can('system:role')" class="wb-panel overflow-hidden px-3 pt-1">
+      <el-table v-loading="loadingRoles" :data="roles" empty-text="暂无角色定义">
+        <el-table-column label="角色名称 / 编码" min-width="200">
+          <template #default="{ row }">
+            <div class="font-bold text-[#111827]">{{ row.name }}</div>
+            <div class="mono text-xs text-gray-400 mt-0.5">{{ row.code }}</div>
+          </template>
+        </el-table-column>
 
-        <el-table :data="roles" v-loading="loadingRoles" size="small" empty-text="暂无角色">
-          <el-table-column prop="code" label="角色编码" width="140" />
-          <el-table-column prop="name" label="角色名称" width="160" />
-          <el-table-column prop="description" label="描述" show-overflow-tooltip />
-          <el-table-column label="权限" min-width="220">
-            <template #default="{ row }">
-              <el-tag v-for="p in permList(row)" :key="p" size="small" style="margin: 1px 4px 1px 0">
-                {{ permLabel(p) }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" width="120">
-            <template #default="{ row }">
-              <el-button link type="primary" size="small" @click="openRole(row)">编辑</el-button>
-              <el-button link type="danger" size="small" @click="removeRole(row)">删除</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-      </el-tab-pane>
+        <el-table-column label="职责描述" prop="description" min-width="240" />
 
-      <!-- 操作日志 -->
-      <el-tab-pane v-if="can('system:log')" label="操作日志" name="log">
-        <div class="toolbar">
-          <el-select v-model="logQuery.module" placeholder="全部模块" clearable style="width: 150px">
-            <el-option v-for="m in moduleOptions" :key="m.value" :label="m.label" :value="m.value" />
+        <el-table-column label="已授权细粒度权限" width="180">
+          <template #default="{ row }">
+            <span v-if="row.code === 'super'" class="wb-state wb-state-ok">内置超级权限</span>
+            <span v-else class="mono text-xs font-semibold text-gray-800">
+              {{ countPerms(row.permissions) }} 项接口与操作权限
+            </span>
+          </template>
+        </el-table-column>
+
+        <el-table-column label="创建时间" width="180">
+          <template #default="{ row }">
+            <span class="mono text-xs text-gray-400">{{ formatDate(row.createdat) }}</span>
+          </template>
+        </el-table-column>
+
+        <el-table-column label="操作" width="170" fixed="right" align="right">
+          <template #default="{ row }">
+            <div class="inline-flex items-center gap-2">
+              <button type="button" class="wb-row-btn" @click="openRoleModal(row)">
+                配置权限矩阵
+              </button>
+              <button
+                v-if="row.code !== 'super'"
+                type="button"
+                class="wb-row-link wb-row-link-danger"
+                @click="deleteRole(row)"
+              >
+                删除
+              </button>
+            </div>
+          </template>
+        </el-table-column>
+      </el-table>
+    </div>
+
+    <!-- Tab 3: 操作审计日志 -->
+    <template v-if="activeTab === 'logs' && can('system:log')">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="flex flex-wrap items-center gap-2.5">
+          <div class="wb-search w-60">
+            <el-icon class="text-gray-400"><Search /></el-icon>
+            <input
+              v-model="logQuery.keyword"
+              type="text"
+              placeholder="搜索目标域名、动作或详情"
+              @keyup.enter="searchLogs"
+            />
+          </div>
+
+          <el-select
+            v-model="logQuery.module"
+            placeholder="全部模块"
+            clearable
+            class="wb-pill-select !w-36"
+            @change="searchLogs"
+          >
+            <el-option label="证书管理 (cert)" value="cert" />
+            <el-option label="自动部署 (deploy)" value="deploy" />
+            <el-option label="Agent 管控 (agent)" value="agent" />
+            <el-option label="云授权 (auth)" value="auth" />
+            <el-option label="系统治理 (system)" value="system" />
           </el-select>
-          <el-input v-model="logQuery.username" placeholder="用户名" clearable style="width: 140px" />
-          <el-select v-model="logQuery.result" placeholder="全部结果" clearable style="width: 120px">
+
+          <el-select
+            v-model="logQuery.result"
+            placeholder="执行结果"
+            clearable
+            class="wb-pill-select !w-32"
+            @change="searchLogs"
+          >
             <el-option label="成功" value="SUCCESS" />
             <el-option label="失败" value="FAIL" />
           </el-select>
-          <el-input
-            v-model="logQuery.keyword"
-            placeholder="对象/详情/信息关键字"
-            clearable
-            style="width: 180px"
-            @keyup.enter="searchLogs"
-            @clear="searchLogs"
-          />
-          <el-date-picker
-            v-model="logQuery.range"
-            type="datetimerange"
-            value-format="YYYY-MM-DD HH:mm:ss"
-            start-placeholder="开始时间"
-            end-placeholder="结束时间"
-            style="width: 350px"
-          />
-          <el-button type="primary" @click="searchLogs">查询</el-button>
-          <el-button @click="resetLogs">重置</el-button>
-        </div>
 
-        <el-table :data="logs" v-loading="loadingLogs" size="small" empty-text="暂无操作日志">
-          <el-table-column label="时间" width="170">
-            <template #default="{ row }">{{ fmt(row.createdat) }}</template>
-          </el-table-column>
-          <el-table-column prop="username" label="操作人" width="110" />
-          <el-table-column prop="role" label="角色" width="110" />
-          <el-table-column label="模块" width="100">
-            <template #default="{ row }">{{ moduleLabel(row.module) }}</template>
-          </el-table-column>
-          <el-table-column prop="action" label="操作" width="150" />
-          <el-table-column prop="method" label="方式" width="80" />
-          <el-table-column prop="target" label="对象" min-width="140" show-overflow-tooltip />
-          <el-table-column prop="detail" label="详情" min-width="180" show-overflow-tooltip />
-          <el-table-column prop="ip" label="IP" width="130" />
-          <el-table-column label="结果" width="90">
+          <button type="button" class="wb-btn" @click="searchLogs">筛选</button>
+          <button
+            v-if="logQuery.module || logQuery.result || logQuery.keyword"
+            type="button"
+            class="wb-row-link"
+            @click="resetLogQuery"
+          >
+            重置
+          </button>
+        </div>
+      </div>
+
+      <div class="wb-panel overflow-hidden px-3 pt-1">
+        <el-table v-loading="loadingLogs" :data="logRows" empty-text="暂无操作审计日志">
+          <el-table-column label="时间" width="175">
             <template #default="{ row }">
-              <el-tag :type="row.result === 'SUCCESS' ? 'success' : 'danger'" size="small">
-                {{ row.result === 'SUCCESS' ? '成功' : '失败' }}
-              </el-tag>
+              <span class="mono text-xs text-gray-500">{{ formatDate(row.createdat) }}</span>
             </template>
           </el-table-column>
-          <el-table-column prop="message" label="信息" min-width="140" show-overflow-tooltip />
-          <el-table-column label="耗时" width="90">
-            <template #default="{ row }">{{ row.costms == null ? '-' : row.costms + ' ms' }}</template>
+
+          <el-table-column label="操作人 / 角色" width="150">
+            <template #default="{ row }">
+              <div class="font-medium text-gray-900">{{ row.username }}</div>
+              <div class="mono text-[11px] text-gray-400">{{ row.role || '-' }} · {{ row.ip }}</div>
+            </template>
+          </el-table-column>
+
+          <el-table-column label="模块 / 动作" width="165">
+            <template #default="{ row }">
+              <div class="mono text-xs font-semibold text-gray-800">{{ row.action }}</div>
+              <div class="mono text-[11px] text-gray-400">{{ row.module }} · {{ row.method }}</div>
+            </template>
+          </el-table-column>
+
+          <el-table-column label="操作目标对象" min-width="190">
+            <template #default="{ row }">
+              <span class="mono text-xs text-gray-800 break-all">{{ row.target || '—' }}</span>
+            </template>
+          </el-table-column>
+
+          <el-table-column label="变更详情与回执" min-width="240">
+            <template #default="{ row }">
+              <span class="text-xs text-gray-500">{{ row.detail || row.message || '—' }}</span>
+            </template>
+          </el-table-column>
+
+          <el-table-column label="结果 / 耗时" width="130" align="right">
+            <template #default="{ row }">
+              <div
+                class="wb-state justify-end"
+                :class="row.result === 'SUCCESS' ? 'wb-state-ok' : 'wb-state-err'"
+              >
+                {{ row.result === 'SUCCESS' ? '成功' : '失败' }}
+              </div>
+              <div class="mono text-[11px] text-gray-400">{{ row.costms || 0 }} ms</div>
+            </template>
           </el-table-column>
         </el-table>
 
-        <div class="pager">
+        <div class="px-3 py-3.5 flex items-center justify-between">
+          <span class="text-xs text-gray-400">共记录 {{ logTotal }} 条合规审计事件</span>
           <el-pagination
-            background
-            layout="total, sizes, prev, pager, next"
+            v-model:current-page="logQuery.page"
+            v-model:page-size="logQuery.size"
             :total="logTotal"
-            :current-page="logQuery.page"
-            :page-size="logQuery.size"
-            :page-sizes="[10, 20, 50, 100]"
-            @current-change="onLogPage"
-            @size-change="onLogSize"
+            :page-sizes="[20, 50, 100]"
+            layout="sizes, prev, pager, next"
+            small
+            @size-change="loadLogs"
+            @current-change="loadLogs"
           />
         </div>
-      </el-tab-pane>
-    </el-tabs>
+      </div>
+    </template>
 
-    <!-- 用户弹窗 -->
-    <el-dialog v-model="userVisible" :title="userForm.id ? '编辑用户' : '新建用户'" width="520px">
-      <el-form label-width="90px">
-        <el-form-item label="用户名">
-          <el-input v-model="userForm.username" :disabled="!!userForm.id" placeholder="登录账号，如 ops01" />
+    <!-- 新建/编辑账号弹窗 -->
+    <el-dialog
+      v-model="userVisible"
+      :title="userForm.id ? '编辑账号角色与状态' : '新建平台运维/审计账号'"
+      width="460px"
+    >
+      <el-form label-position="top">
+        <el-form-item v-if="!userForm.id" label="登录用户名" required>
+          <el-input v-model="userForm.username" class="mono" placeholder="例如：sre_wang" />
         </el-form-item>
-        <el-form-item v-if="!userForm.id" label="密码">
-          <el-input v-model="userForm.password" type="password" placeholder="至少 6 位" />
+        <el-form-item v-if="!userForm.id" label="初始登录密码 (至少 6 位)" required>
+          <el-input v-model="userForm.password" type="password" show-password placeholder="设置初始密码" />
         </el-form-item>
-        <el-form-item label="昵称">
-          <el-input v-model="userForm.nickname" placeholder="显示名称" />
+        <el-form-item label="显示姓名 / 岗位标识">
+          <el-input v-model="userForm.nickname" placeholder="例如：SRE 值班 · 王工" />
         </el-form-item>
-        <el-form-item label="角色">
-          <el-select v-model="userForm.roleid" style="width: 100%" placeholder="选择角色">
-            <el-option v-for="r in roles" :key="r.id" :label="r.name" :value="r.id" />
+        <el-form-item label="分配 RBAC 角色" required>
+          <el-select v-model="userForm.roleid" class="w-full" placeholder="请选择角色">
+            <el-option v-for="r in roles" :key="r.id" :value="r.id" :label="`${r.name} (${r.code})`" />
           </el-select>
         </el-form-item>
-        <el-form-item label="状态">
-          <el-radio-group v-model="userForm.status">
-            <el-radio-button value="ACTIVE">正常</el-radio-button>
-            <el-radio-button value="DISABLED">禁用</el-radio-button>
-          </el-radio-group>
+        <el-form-item label="账号状态">
+          <el-select v-model="userForm.status" class="w-full">
+            <el-option label="正常启用 (ACTIVE)" value="ACTIVE" />
+            <el-option label="停用封禁 (DISABLED)" value="DISABLED" />
+          </el-select>
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="userVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="saveUser">保存</el-button>
+        <button type="button" class="wb-btn" @click="userVisible = false">取消</button>
+        <button type="button" class="wb-btn wb-btn-primary ml-2" @click="saveUser">
+          保存账号
+        </button>
       </template>
     </el-dialog>
 
     <!-- 重置密码弹窗 -->
-    <el-dialog v-model="resetVisible" title="重置密码" width="460px">
-      <el-alert type="warning" :closable="false" show-icon :title="'将重置用户「' + resetForm.username + '」的密码，重置后该用户需重新登录'" />
-      <el-form label-width="80px" style="margin-top: 16px">
-        <el-form-item label="新密码">
-          <el-input v-model="resetForm.password" type="password" placeholder="至少 6 位" />
+    <el-dialog v-model="pwdVisible" title="重置账号登录密码" width="420px">
+      <el-form label-position="top">
+        <div class="text-xs text-gray-600 mb-3">
+          正在为账号 <strong class="mono text-gray-900">{{ pwdTarget?.username }}</strong> 重置密码：
+        </div>
+        <el-form-item label="新登录密码 (至少 6 位)" required>
+          <el-input v-model="newPassword" type="password" show-password placeholder="请输入新密码" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="resetVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="doReset">确定</el-button>
+        <button type="button" class="wb-btn" @click="pwdVisible = false">取消</button>
+        <button type="button" class="wb-btn wb-btn-primary ml-2" @click="confirmResetPwd">
+          确认重置
+        </button>
       </template>
     </el-dialog>
 
-    <!-- 角色弹窗 -->
-    <el-dialog v-model="roleVisible" :title="roleForm.id ? '编辑角色' : '新建角色'" width="680px">
-      <el-form label-width="90px">
-        <el-form-item label="角色编码">
-          <el-input v-model="roleForm.code" :disabled="roleForm.code === 'super'" placeholder="英文标识，如 ops" />
+    <!-- 配置角色权限矩阵弹窗 -->
+    <el-dialog
+      v-model="roleVisible"
+      :title="roleForm.id ? `编辑角色权限矩阵 — ${roleForm.name}` : '新建自定义 RBAC 角色'"
+      width="680px"
+    >
+      <el-form label-position="top">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <el-form-item label="角色编码 (Code)" required>
+            <el-input
+              v-model="roleForm.code"
+              :disabled="roleForm.code === 'super'"
+              class="mono"
+              placeholder="例如：biz_ops"
+            />
+          </el-form-item>
+          <el-form-item label="角色中文名称" required>
+            <el-input v-model="roleForm.name" placeholder="例如：业务线证书管理员" />
+          </el-form-item>
+        </div>
+
+        <el-form-item label="角色职责说明">
+          <el-input v-model="roleForm.description" placeholder="说明该角色允许操作的范围" />
         </el-form-item>
-        <el-form-item label="角色名称">
-          <el-input v-model="roleForm.name" placeholder="如：运维管理员" />
-        </el-form-item>
-        <el-form-item label="描述">
-          <el-input v-model="roleForm.description" type="textarea" :rows="2" />
-        </el-form-item>
-        <el-form-item label="操作权限">
-          <div class="perm-groups">
-            <div v-for="g in permissionGroups" :key="g.module" class="perm-group">
-              <div class="perm-group-head">
-                <el-checkbox
-                  :model-value="isModuleAll(g)"
-                  :indeterminate="isModuleSome(g)"
-                  @change="(v) => toggleModule(g, v)"
-                >
-                  {{ g.label }}
-                </el-checkbox>
-                <span class="perm-module">{{ g.module }}</span>
+
+        <el-form-item label="细粒度功能与接口权限勾选">
+          <div class="w-full border border-[#eceef2] rounded-xl divide-y divide-[#f1f3f6] bg-[#fafbfc]">
+            <div
+              v-for="group in permCatalog"
+              :key="group.module"
+              class="p-3 flex flex-col sm:flex-row sm:items-center gap-3"
+            >
+              <div class="w-32 shrink-0 font-bold text-xs text-gray-800">
+                {{ group.label }}
               </div>
-              <el-checkbox-group v-model="roleForm.permissions" class="perm-items">
-                <el-checkbox v-for="it in g.items" :key="it.key" :value="it.key">{{ it.label }}</el-checkbox>
+              <el-checkbox-group v-model="roleForm.permissions" class="flex flex-wrap gap-x-4 gap-y-1">
+                <el-checkbox
+                  v-for="item in group.items"
+                  :key="item.key"
+                  :value="item.key"
+                  :disabled="roleForm.code === 'super'"
+                >
+                  <span class="text-xs">{{ item.label }}</span>
+                </el-checkbox>
               </el-checkbox-group>
             </div>
           </div>
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="roleVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="saveRole">保存</el-button>
+        <button type="button" class="wb-btn" @click="roleVisible = false">取消</button>
+        <button type="button" class="wb-btn wb-btn-primary ml-2" @click="saveRole">
+          保存角色权限
+        </button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { api } from '../api'
+import { Plus, Search, FullScreen } from '@element-plus/icons-vue'
+import { call } from '../api'
 import { can } from '../store'
-import { formatDate } from '../utils'
+import { formatDate, isFullscreen, toggleFullscreen } from '../utils'
 
-/** 日志模块筛选（与后端权限目录的模块编码一致） */
-const MODULE_OPTIONS = [
-  { value: 'dashboard', label: '首页概览' },
-  { value: 'auth', label: '云服务授权' },
-  { value: 'cert', label: '证书管理' },
-  { value: 'deploy', label: '自动部署' },
-  { value: 'agent', label: '服务器 Agent' },
-  { value: 'system', label: '系统管理' }
-]
+const defaultTab = can('system:user') ? 'users' : can('system:role') ? 'roles' : 'logs'
+const activeTab = ref(defaultTab)
 
-const tab = ref('user')
-const keyword = ref('')
-const users = ref([])
-const roles = ref([])
-const permissionGroups = ref([])
 const loadingUsers = ref(false)
-const loadingRoles = ref(false)
-const saving = ref(false)
-
+const userKeyword = ref('')
+const users = ref([])
 const userVisible = ref(false)
-const userForm = ref({})
-const resetVisible = ref(false)
-const resetForm = ref({})
-const roleVisible = ref(false)
-const roleForm = ref({})
+const userForm = reactive({
+  id: null,
+  username: '',
+  password: '',
+  nickname: '',
+  roleid: null,
+  status: 'ACTIVE'
+})
 
-const logs = ref([])
-const logTotal = ref(0)
+const pwdVisible = ref(false)
+const pwdTarget = ref(null)
+const newPassword = ref('')
+
+const loadingRoles = ref(false)
+const roles = ref([])
+const permCatalog = ref([])
+const roleVisible = ref(false)
+const roleForm = reactive({
+  id: null,
+  code: '',
+  name: '',
+  description: '',
+  permissions: []
+})
+
 const loadingLogs = ref(false)
-const moduleOptions = MODULE_OPTIONS
-const logQuery = ref({
+const logRows = ref([])
+const logTotal = ref(0)
+const logQuery = reactive({
+  page: 1,
+  size: 20,
   module: '',
   username: '',
   result: '',
-  keyword: '',
-  range: null,
-  page: 1,
-  size: 20
+  keyword: ''
 })
 
-const fmt = formatDate
-
-function permList(row) {
-  return (row.permissions || '').split(',').filter((x) => x)
-}
-
-function permLabel(key) {
-  for (const g of permissionGroups.value) {
-    const item = (g.items || []).find((x) => x.key === key)
-    if (item) {
-      return g.label + ' - ' + item.label
-    }
-  }
-  return key
-}
-
-function isModuleAll(group) {
-  const items = group.items || []
-  if (!items.length) {
-    return false
-  }
-  return items.every((x) => roleForm.value.permissions.indexOf(x.key) >= 0)
-}
-
-function isModuleSome(group) {
-  const items = group.items || []
-  const selected = items.filter((x) => roleForm.value.permissions.indexOf(x.key) >= 0).length
-  return selected > 0 && selected < items.length
-}
-
-function toggleModule(group, checked) {
-  const items = group.items || []
-  const current = roleForm.value.permissions || []
-  if (checked) {
-    items.forEach((x) => {
-      if (current.indexOf(x.key) < 0) {
-        current.push(x.key)
-      }
-    })
-  } else {
-    roleForm.value.permissions = current.filter((key) => !items.some((x) => x.key === key))
-    return
-  }
-  roleForm.value.permissions = current
-}
-
-function moduleLabel(value) {
-  const m = MODULE_OPTIONS.find((x) => x.value === value)
-  return m ? m.label : value || '-'
+function countPerms(permStr) {
+  if (!permStr) return 0
+  return String(permStr)
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean).length
 }
 
 async function loadUsers() {
+  if (!can('system:user')) return
   loadingUsers.value = true
   try {
-    users.value = await api('/system/users?keyword=' + encodeURIComponent(keyword.value || ''))
+    users.value =
+      (await call('/system/users?keyword=' + encodeURIComponent(userKeyword.value.trim()))) || []
+    if (!roles.value.length) {
+      roles.value = (await call('/system/roles')) || []
+    }
+  } catch {
+    // handled in call()
   } finally {
     loadingUsers.value = false
   }
 }
 
 async function loadRoles() {
+  if (!can('system:role') && !can('system:user')) return
   loadingRoles.value = true
   try {
-    roles.value = await api('/system/roles')
+    roles.value = (await call('/system/roles')) || []
+    if (can('system:role') && !permCatalog.value.length) {
+      permCatalog.value = (await call('/system/permissions')) || []
+    }
+  } catch {
+    // handled in call()
   } finally {
     loadingRoles.value = false
   }
 }
 
-async function loadPermissions() {
-  if (!can('system:role')) {
-    return
-  }
-  permissionGroups.value = await api('/system/permissions')
-}
-
-async function searchLogs() {
-  if (!can('system:log')) {
-    return
-  }
+async function loadLogs() {
+  if (!can('system:log')) return
   loadingLogs.value = true
   try {
-    const q = logQuery.value
-    const body = {
-      module: q.module || null,
-      username: q.username || null,
-      result: q.result || null,
-      keyword: q.keyword || null,
-      page: q.page,
-      size: q.size
-    }
-    if (q.range && q.range.length === 2) {
-      body.start = q.range[0]
-      body.end = q.range[1]
-    }
-    const data = await api('/system/logs', { method: 'POST', body })
-    logs.value = data.rows || []
-    logTotal.value = data.total || 0
-  } catch (e) {
-    ElMessage.error(e.message)
+    const res = await call('/system/logs', {
+      method: 'POST',
+      body: { ...logQuery }
+    })
+    logRows.value = res?.rows || []
+    logTotal.value = res?.total || 0
+  } catch {
+    // handled in call()
   } finally {
     loadingLogs.value = false
   }
 }
 
-function resetLogs() {
-  logQuery.value = { module: '', username: '', result: '', keyword: '', range: null, page: 1, size: 20 }
-  searchLogs()
+function switchTab(tab) {
+  activeTab.value = tab
+  if (tab === 'users') loadUsers()
+  if (tab === 'roles') loadRoles()
+  if (tab === 'logs') loadLogs()
 }
 
-function onLogPage(page) {
-  logQuery.value.page = page
-  searchLogs()
-}
-
-function onLogSize(size) {
-  logQuery.value.size = size
-  logQuery.value.page = 1
-  searchLogs()
-}
-
-function openUser(row) {
-  userForm.value = row
-    ? { id: row.id, username: row.username, nickname: row.nickname, roleid: row.roleid, status: row.status || 'ACTIVE' }
-    : { id: null, username: '', password: '', nickname: '', roleid: null, status: 'ACTIVE' }
+function openUserModal(row = null) {
+  if (row) {
+    userForm.id = row.id
+    userForm.username = row.username
+    userForm.password = ''
+    userForm.nickname = row.nickname || ''
+    userForm.roleid = row.roleid
+    userForm.status = row.status || 'ACTIVE'
+  } else {
+    userForm.id = null
+    userForm.username = ''
+    userForm.password = ''
+    userForm.nickname = ''
+    userForm.roleid = roles.value[0]?.id || null
+    userForm.status = 'ACTIVE'
+  }
   userVisible.value = true
 }
 
 async function saveUser() {
-  const f = userForm.value
-  if (!f.id && (!f.username || !f.password)) {
-    ElMessage.warning('用户名和密码不能为空')
+  if (!userForm.roleid) {
+    ElMessage.warning('请为用户分配角色')
     return
   }
-  if (!f.roleid) {
-    ElMessage.warning('请选择角色')
+  if (!userForm.id && (!userForm.username.trim() || !userForm.password)) {
+    ElMessage.warning('请填写登录用户名与初始密码')
     return
   }
-  saving.value = true
   try {
-    await api('/system/user/save', { method: 'POST', body: f })
-    ElMessage.success('保存成功')
+    await call('/system/user/save', {
+      method: 'POST',
+      body: {
+        id: userForm.id || undefined,
+        username: userForm.username.trim(),
+        password: userForm.password || undefined,
+        nickname: userForm.nickname.trim(),
+        roleid: userForm.roleid,
+        status: userForm.status
+      }
+    })
+    ElMessage.success(userForm.id ? '用户已更新' : '新账号已创建')
     userVisible.value = false
-    loadUsers()
-  } catch (e) {
-    ElMessage.error(e.message)
-  } finally {
-    saving.value = false
+    await loadUsers()
+  } catch {
+    // handled in call()
   }
 }
 
-function openReset(row) {
-  resetForm.value = { id: row.id, username: row.username, password: '' }
-  resetVisible.value = true
+function openResetPwd(row) {
+  pwdTarget.value = row
+  newPassword.value = ''
+  pwdVisible.value = true
 }
 
-async function doReset() {
-  if (!resetForm.value.password || resetForm.value.password.length < 6) {
-    ElMessage.warning('新密码至少 6 位')
+async function confirmResetPwd() {
+  if (!newPassword.value || newPassword.value.length < 6) {
+    ElMessage.warning('新密码长度至少 6 位')
     return
   }
-  saving.value = true
   try {
-    await api('/system/user/resetPassword', { method: 'POST', body: resetForm.value })
-    ElMessage.success('密码已重置')
-    resetVisible.value = false
-  } catch (e) {
-    ElMessage.error(e.message)
-  } finally {
-    saving.value = false
+    await call('/system/user/resetPassword', {
+      method: 'POST',
+      body: { id: pwdTarget.value.id, password: newPassword.value }
+    })
+    ElMessage.success('密码重置成功')
+    pwdVisible.value = false
+  } catch {
+    // handled in call()
   }
 }
 
-async function removeUser(row) {
-  await ElMessageBox.confirm('确定删除用户「' + row.username + '」？', '提示', { type: 'warning' })
+async function deleteUser(row) {
+  await ElMessageBox.confirm(`确认删除账号「${row.username}」吗？`, '删除账号确认', {
+    type: 'warning',
+    confirmButtonText: '确认删除',
+    cancelButtonText: '取消'
+  })
   try {
-    await api('/system/user/delete', { method: 'POST', body: { id: row.id } })
-    ElMessage.success('已删除')
-    loadUsers()
-  } catch (e) {
-    ElMessage.error(e.message)
+    await call('/system/user/delete', {
+      method: 'POST',
+      body: { id: row.id }
+    })
+    ElMessage.success('账号已删除')
+    await loadUsers()
+  } catch {
+    // handled in call()
   }
 }
 
-function openRole(row) {
-  roleForm.value = row
-    ? { id: row.id, code: row.code, name: row.name, description: row.description, permissions: permList(row) }
-    : { id: null, code: '', name: '', description: '', permissions: [] }
+async function openRoleModal(row = null) {
+  if (!permCatalog.value.length) {
+    try {
+      permCatalog.value = (await call('/system/permissions')) || []
+    } catch {
+      // handled in call()
+    }
+  }
+  if (row) {
+    roleForm.id = row.id
+    roleForm.code = row.code
+    roleForm.name = row.name
+    roleForm.description = row.description || ''
+    roleForm.permissions = row.permissions
+      ? String(row.permissions)
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean)
+      : []
+  } else {
+    roleForm.id = null
+    roleForm.code = ''
+    roleForm.name = ''
+    roleForm.description = ''
+    roleForm.permissions = ['dashboard:view', 'cert:view']
+  }
   roleVisible.value = true
 }
 
 async function saveRole() {
-  const f = roleForm.value
-  if (!f.code || !f.name) {
-    ElMessage.warning('角色编码和名称不能为空')
+  if (!roleForm.code.trim() || !roleForm.name.trim()) {
+    ElMessage.warning('请填写角色编码和名称')
     return
   }
-  saving.value = true
   try {
-    await api('/system/role/save', { method: 'POST', body: f })
-    ElMessage.success('保存成功')
+    await call('/system/role/save', {
+      method: 'POST',
+      body: {
+        id: roleForm.id || undefined,
+        code: roleForm.code.trim(),
+        name: roleForm.name.trim(),
+        description: roleForm.description.trim(),
+        permissions: roleForm.permissions
+      }
+    })
+    ElMessage.success('角色权限矩阵已保存')
     roleVisible.value = false
-    loadRoles()
-  } catch (e) {
-    ElMessage.error(e.message)
-  } finally {
-    saving.value = false
+    await loadRoles()
+  } catch {
+    // handled in call()
   }
 }
 
-async function removeRole(row) {
-  await ElMessageBox.confirm('确定删除角色「' + row.name + '」？', '提示', { type: 'warning' })
+async function deleteRole(row) {
+  await ElMessageBox.confirm(`确认删除角色「${row.name}」吗？`, '删除角色确认', {
+    type: 'warning',
+    confirmButtonText: '确认删除',
+    cancelButtonText: '取消'
+  })
   try {
-    await api('/system/role/delete', { method: 'POST', body: { id: row.id } })
-    ElMessage.success('已删除')
-    loadRoles()
-  } catch (e) {
-    ElMessage.error(e.message)
+    await call('/system/role/delete', {
+      method: 'POST',
+      body: { id: row.id }
+    })
+    ElMessage.success('角色已删除')
+    await loadRoles()
+  } catch {
+    // handled in call()
   }
+}
+
+function searchLogs() {
+  logQuery.page = 1
+  loadLogs()
+}
+
+function resetLogQuery() {
+  logQuery.module = ''
+  logQuery.username = ''
+  logQuery.result = ''
+  logQuery.keyword = ''
+  logQuery.page = 1
+  loadLogs()
 }
 
 onMounted(() => {
-  if (can('system:user')) {
-    loadUsers()
-  }
-  if (can('system:user') || can('system:role')) {
-    loadRoles()
-  }
-  loadPermissions()
-  if (can('system:log')) {
-    searchLogs()
-  }
-  if (!can('system:user')) {
-    tab.value = can('system:role') ? 'role' : 'log'
-  }
+  switchTab(activeTab.value)
 })
 </script>
-
-<style scoped>
-.toolbar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 14px;
-  flex-wrap: wrap;
-}
-.tip {
-  color: #8a919f;
-  font-size: 12px;
-}
-.pager {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 12px;
-}
-.perm-groups {
-  width: 100%;
-}
-.perm-group {
-  border: 1px solid #ebeef5;
-  border-radius: 6px;
-  padding: 8px 12px;
-  margin-bottom: 8px;
-  background: #fafbfc;
-}
-.perm-group-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 2px;
-}
-.perm-module {
-  color: #a8abb2;
-  font-size: 12px;
-}
-.perm-items {
-  padding-left: 8px;
-}
-</style>

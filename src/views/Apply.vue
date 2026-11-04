@@ -1,356 +1,283 @@
 <template>
-  <div class="apply-page">
-    <!-- 顶部面包屑/导航 -->
-    <div class="page-header">
-      <el-page-header @back="goBack" content="申请证书" description="选择域名和验证方式，提交后系统会创建 ACME 订单并生成需要配置的 DNS 记录">
-        <template #content>
-          <div class="header-content">
-            <el-breadcrumb separator="/">
-              <el-breadcrumb-item :to="{ path: '/cert' }">证书管理</el-breadcrumb-item>
-              <el-breadcrumb-item>申请证书</el-breadcrumb-item>
-            </el-breadcrumb>
-          </div>
-        </template>
-      </el-page-header>
+  <div class="space-y-4">
+    <!-- 顶部页面栏 -->
+    <div class="wb-page-head">
+      <div class="wb-page-title-group">
+        <div class="wb-page-title-row">
+          <button type="button" class="wb-row-btn" @click="$router.push('/cert')">
+            <el-icon><ArrowLeft /></el-icon>
+            <span>返回列表</span>
+          </button>
+          <h1 class="wb-page-title">申请新证书</h1>
+        </div>
+        <p class="wb-page-sub">
+          <span>支持单域名、SAN 多域名合并签发及泛域名 (*.example.com)</span>
+          <span class="wb-sep">·</span>
+          <span>签发后自动纳入全生命周期资产监控</span>
+        </p>
+      </div>
     </div>
 
-    <div class="apply-container">
-      <!-- 左侧主表单 -->
-      <div class="apply-main">
-        <el-form label-position="top" class="apply-form" :model="form">
-          <!-- 证书名称 -->
-          <div class="form-section">
-            <div class="section-title">
-              <span class="section-icon"><el-icon><Document /></el-icon></span>
-              证书名称
-            </div>
-            <el-input
-              v-model="form.name"
-              placeholder="网站/业务的中文名称，如：公司官网、客户A商城（用于列表识别）"
-              maxlength="64"
-              size="large"
-            />
-            <div class="form-hint">
-              <el-icon><InfoFilled /></el-icon>
-              不填写时默认使用第一个域名作为名称；名称可用于搜索和自动部署时识别站点
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
+      <!-- 左侧表单区 -->
+      <div class="lg:col-span-2 space-y-4">
+        <div class="wb-panel">
+          <div class="wb-panel-header">
+            <div>
+              <h3 class="wb-panel-title">1. 域名与签发机构 (CA)</h3>
+              <p class="wb-panel-sub">选择加密算法规格与目标签发品牌</p>
             </div>
           </div>
 
-          <!-- 域名 -->
-          <div class="form-section">
-            <div class="section-title">
-              <span class="section-icon"><el-icon><Collection /></el-icon></span>
-              域名
-              <span class="required">*</span>
-            </div>
-            <div class="domain-input-area">
-              <el-input
-                v-model="domainInput"
-                placeholder="输入域名后回车添加，如 example.com 或 *.example.com"
-                @keyup.enter="addDomain"
-                :disabled="form.domains.length >= 100"
-                size="large"
-              >
-                <template #append>
-                  <el-button size="large" @click="addDomain">
-                    <el-icon><Plus /></el-icon> 添加
-                  </el-button>
-                </template>
-              </el-input>
-            </div>
-            <div class="domain-tags" v-if="form.domains.length">
-              <div
-                v-for="(d, i) in form.domains"
-                :key="d"
-                :class="['domain-tag', { wildcard: d.startsWith('*.') }]"
-              >
-                <span class="domain-tag-text">{{ d }}</span>
-                <el-icon class="domain-tag-close" @click="form.domains.splice(i, 1)"><Close /></el-icon>
-              </div>
-            </div>
-            <div class="form-hint">
-              <el-icon><InfoFilled /></el-icon>
-              普通域名最多可添加 100 个；通配符域名（*.example.com）必须单独提交。每个域名将独立生成证书记录。
-            </div>
-          </div>
-
-          <!-- 域名验证 -->
-          <div class="form-section">
-            <div class="section-title">
-              <span class="section-icon"><el-icon><Lock /></el-icon></span>
-              域名验证
-              <span class="required">*</span>
-            </div>
-            <div class="validation-tabs">
-              <div
-                :class="['validation-tab', { active: form.validation === 'CLOUD_DNS' }]"
-                @click="form.validation = 'CLOUD_DNS'"
-              >
-                <div class="tab-icon"><el-icon><Cloudy /></el-icon></div>
-                <div>
-                  <div class="tab-title">云 DNS 服务商授权</div>
-                  <div class="tab-hint">已授权 DNS 服务商自动添加 TXT 记录，全自动验证</div>
-                </div>
-              </div>
-              <div
-                :class="['validation-tab', { active: form.validation === 'MANUAL_DNS' }]"
-                @click="form.validation = 'MANUAL_DNS'"
-              >
-                <div class="tab-icon"><el-icon><EditPen /></el-icon></div>
-                <div>
-                  <div class="tab-title">手动 DNS 解析</div>
-                  <div class="tab-hint">在您的 DNS 平台手动添加 TXT 记录，适合无 API 授权场景</div>
-                </div>
-              </div>
-            </div>
-
-            <!-- 云 DNS 选择 -->
-            <div v-if="form.validation === 'CLOUD_DNS'" class="validation-content">
-              <el-select
-                v-model="form.cloudAuthId"
-                placeholder="选择已授权的 DNS 服务商"
-                style="width: 100%"
-                filterable
-                size="large"
-              >
-                <el-option
-                  v-for="a in auths"
-                  :key="a.id"
-                  :label="a.name + '（' + providerLabel(a.provider) + '）'"
-                  :value="a.id"
+          <div class="wb-panel-body space-y-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-semibold text-gray-700 mb-1.5">
+                  证书业务名称 (选填，默认取主域名)
+                </label>
+                <el-input
+                  v-model="form.name"
+                  placeholder="例如：核心支付网关泛域名证书"
                 />
-              </el-select>
-              <div class="form-hint">
-                没有看到可用的授权？<el-button link type="primary" @click="goAuth">前往添加云服务授权 →</el-button>
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-gray-700 mb-1.5">
+                  密钥算法规格
+                </label>
+                <div class="wb-mode-switch w-full flex">
+                  <button
+                    type="button"
+                    class="wb-mode-btn flex-1 justify-center"
+                    :class="{ active: form.keyType === 'ECC' }"
+                    @click="form.keyType = 'ECC'"
+                  >
+                    ECC (P-256 · 推荐)
+                  </button>
+                  <button
+                    type="button"
+                    class="wb-mode-btn flex-1 justify-center"
+                    :class="{ active: form.keyType === 'RSA' }"
+                    @click="form.keyType = 'RSA'"
+                  >
+                    RSA (2048 · 兼容)
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <div class="flex items-center justify-between mb-1.5">
+                <label class="text-xs font-semibold text-gray-700">
+                  绑定域名列表 (每行或逗号分隔一个域名) <span class="text-red-600">*</span>
+                </label>
+                <span class="mono text-xs text-gray-400">
+                  已解析 {{ parsedDomains.length }} 个有效域名
+                  <template v-if="hasWildcard"> · 含通配符域名</template>
+                </span>
               </div>
               <el-input
-                v-model="form.mainDomain"
-                placeholder="主域名（DNS Zone），如 example.com"
-                size="large"
-                style="margin-top: 12px"
+                v-model="domainText"
+                type="textarea"
+                :rows="4"
+                class="mono text-xs"
+                placeholder="*.api.example.com&#10;api.example.com"
               />
             </div>
 
-            <!-- 手动 DNS 说明 -->
-            <div v-if="form.validation === 'MANUAL_DNS'" class="validation-content">
-              <div class="manual-dns-info">
-                <div class="dns-guide-steps">
-                  <div class="step">
-                    <div class="step-num">1</div>
-                    <div class="step-content">
-                      <div class="step-title">提交申请</div>
-                      <div class="step-desc">系统会为每个域名生成对应的 TXT 验证记录</div>
-                    </div>
-                  </div>
-                  <div class="step-arrow"><el-icon><ArrowRight /></el-icon></div>
-                  <div class="step">
-                    <div class="step-num">2</div>
-                    <div class="step-content">
-                      <div class="step-title">添加 TXT 记录</div>
-                      <div class="step-desc">到 DNS 托管平台添加系统生成的 TXT 记录</div>
-                    </div>
-                  </div>
-                  <div class="step-arrow"><el-icon><ArrowRight /></el-icon></div>
-                  <div class="step">
-                    <div class="step-num">3</div>
-                    <div class="step-content">
-                      <div class="step-title">等待传播</div>
-                      <div class="step-desc">DNS 传播通常需要 1-10 分钟</div>
-                    </div>
-                  </div>
-                  <div class="step-arrow"><el-icon><ArrowRight /></el-icon></div>
-                  <div class="step">
-                    <div class="step-num">4</div>
-                    <div class="step-content">
-                      <div class="step-title">验证签发</div>
-                      <div class="step-desc">返回本系统点击验证，自动完成签发</div>
-                    </div>
-                  </div>
-                </div>
+            <div>
+              <label class="block text-xs font-semibold text-gray-700 mb-1.5">
+                选择签发机构 (CA Brand) <span class="text-red-600">*</span>
+              </label>
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <button
+                  v-for="item in caOptions"
+                  :key="item.value"
+                  type="button"
+                  class="text-left p-3.5 rounded-xl border transition-all cursor-pointer bg-white"
+                  :class="
+                    form.brand === item.value
+                      ? 'border-[#111827] ring-1 ring-[#111827]'
+                      : 'border-[#e5e7eb] hover:border-gray-400'
+                  "
+                  @click="selectBrand(item.value)"
+                >
+                  <div class="font-bold text-[13px] text-[#111827]">{{ item.label }}</div>
+                  <div class="text-[11.5px] text-gray-500 mt-0.5">{{ item.desc }}</div>
+                </button>
               </div>
             </div>
-          </div>
 
-          <!-- 证书品牌 -->
-          <div class="form-section">
-            <div class="section-title">
-              <span class="section-icon"><el-icon><Medal /></el-icon></span>
-              证书品牌
-              <span class="required">*</span>
-            </div>
-            <div class="brand-grid">
-              <div
-                v-for="b in brandOptions"
-                :key="b.value"
-                :class="['brand-card', { active: form.brand === b.value }]"
-                @click="selectBrand(b.value)"
-              >
-                <div class="brand-radio">
-                  <div v-if="form.brand === b.value" class="radio-inner"></div>
-                </div>
-                <div class="brand-icon-wrap">
-                  <div class="brand-icon" :style="{ background: b.bg }">
-                    <el-icon><component :is="b.icon" /></el-icon>
-                  </div>
-                </div>
-                <div class="brand-info">
-                  <div class="brand-name">
-                    {{ b.label }}
-                    <el-tag v-if="b.recommend" type="danger" size="small" effect="light" class="brand-tag">推荐</el-tag>
-                  </div>
-                  <div class="brand-desc">{{ b.desc }}</div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- 加密算法 -->
-          <div class="form-section">
-            <div class="section-title">
-              <span class="section-icon"><el-icon><Key /></el-icon></span>
-              加密算法
-              <span class="required">*</span>
-            </div>
-            <div class="algo-cards">
-              <div
-                :class="['algo-card', { active: form.keyType === 'RSA' }]"
-                @click="form.keyType = 'RSA'"
-              >
-                <div class="algo-name">RSA</div>
-                <div class="algo-spec">RSA 2048</div>
-                <div class="algo-badge">兼容性好</div>
-              </div>
-              <div
-                :class="['algo-card', { active: form.keyType === 'ECC' }]"
-                @click="form.keyType = 'ECC'"
-              >
-                <div class="algo-name">ECC</div>
-                <div class="algo-spec">EC P-256</div>
-                <div class="algo-badge">更现代</div>
-              </div>
-            </div>
-            <div class="form-hint">RSA 兼容性好，适合老旧服务器；ECC 体积更小、加密强度更高，推荐现代服务器使用</div>
-          </div>
-
-          <!-- 备注 -->
-          <div class="form-section">
-            <div class="section-title">
-              <span class="section-icon"><el-icon><Document /></el-icon></span>
-              备注（可选）
-            </div>
-            <el-input
-              v-model="form.remark"
-              type="textarea"
-              :rows="2"
-              placeholder="如：生产环境主站、测试用证书、客户 A 的网站等"
-            />
-          </div>
-
-          <!-- 自定义组织信息（仅内置 CA） -->
-          <div class="form-section" v-if="form.brand === 'INTERNAL'">
-            <div class="section-title">
-              <span class="section-icon"><el-icon><UserFilled /></el-icon></span>
-              自定义组织信息（仅内置 CA）
-            </div>
-            <el-alert
-              type="info"
-              :closable="false"
-              show-icon
-              style="margin-bottom: 12px"
-              title="Let's Encrypt / ZeroSSL 等 DV 证书不支持自定义组织（O/OU 字段），以下设置仅对内置 CA 生效"
-            />
-            <el-row :gutter="12">
-              <el-col :span="12">
-                <div class="sub-field">
-                  <div class="sub-label">组织 (O)</div>
-                  <el-input
-                    v-model="form.orgName"
-                    placeholder="如：浙江索联信息科技有限公司"
-                    maxlength="64"
-                  />
-                </div>
-              </el-col>
-              <el-col :span="12">
-                <div class="sub-field">
-                  <div class="sub-label">组织单位 (OU)</div>
-                  <el-input
-                    v-model="form.orgUnit"
-                    placeholder="如：技术部 / 运维组"
-                    maxlength="64"
-                  />
-                </div>
-              </el-col>
-            </el-row>
-          </div>
-        </el-form>
-      </div>
-
-      <!-- 右侧操作栏 -->
-      <div class="apply-sidebar">
-        <div class="sidebar-card">
-          <div class="sidebar-title">申请概览</div>
-          <div class="summary-list">
-            <div class="summary-item">
-              <span class="summary-label">域名数量</span>
-              <span class="summary-value">{{ form.domains.length }} 个</span>
-            </div>
-            <div class="summary-item">
-              <span class="summary-label">验证方式</span>
-              <span class="summary-value">{{ validationLabel }}</span>
-            </div>
-            <div class="summary-item">
-              <span class="summary-label">签发机构</span>
-              <span class="summary-value">{{ brandLabel(form.brand) }}</span>
-            </div>
-            <div class="summary-item">
-              <span class="summary-label">密钥算法</span>
-              <span class="summary-value">{{ form.keyType === 'RSA' ? 'RSA 2048' : 'ECC P-256' }}</span>
-            </div>
-          </div>
-          <div class="sidebar-actions">
-            <el-button size="large" @click="goBack" style="width: 100%; margin-bottom: 10px">取消</el-button>
-            <el-button
-              type="primary"
-              size="large"
-              :loading="submitting"
-              @click="submit"
-              style="width: 100%"
+            <div
+              v-if="form.brand === 'INTERNAL'"
+              class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-[#f1f3f6]"
             >
-              {{ submitting ? '提交中...' : '提交申请' }}
-            </el-button>
+              <div>
+                <label class="block text-xs font-semibold text-gray-700 mb-1.5">
+                  自定义组织名称 (O · Organization)
+                </label>
+                <el-input v-model="form.orgName" placeholder="例如：银河云数字科技有限公司" />
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-gray-700 mb-1.5">
+                  自定义部门单位 (OU · Organizational Unit)
+                </label>
+                <el-input v-model="form.orgUnit" placeholder="例如：基础架构与安全部" />
+              </div>
+            </div>
           </div>
         </div>
 
-        <div class="sidebar-card tips">
-          <div class="sidebar-title">
-            <el-icon><QuestionFilled /></el-icon> 帮助提示
-          </div>
-          <div class="tips-list">
-            <div class="tip-item">
-              <div class="tip-icon">
-                <el-icon><Warning /></el-icon>
-              </div>
-              <div class="tip-text">
-                <strong>通配符注意：</strong>通配符证书（*.example.com）不能和普通域名同时申请，请单独提交。
-              </div>
-            </div>
-            <div class="tip-item">
-              <div class="tip-icon">
-                <el-icon><Timer /></el-icon>
-              </div>
-              <div class="tip-text">
-                <strong>DNS 传播：</strong>手动 DNS 验证需要等待 DNS 记录生效，通常 1-10 分钟。
-              </div>
-            </div>
-            <div class="tip-item">
-              <div class="tip-icon">
-                <el-icon><Lock /></el-icon>
-              </div>
-              <div class="tip-text">
-                <strong>有效期：</strong>Let's Encrypt 证书有效期为 90 天，系统会在到期前 30 天自动续期。
-              </div>
+        <div class="wb-panel">
+          <div class="wb-panel-header">
+            <div>
+              <h3 class="wb-panel-title">2. 域名所有权验证方式</h3>
+              <p class="wb-panel-sub">生产环境推荐使用云 DNS API 授权，实现无人值守自动续签</p>
             </div>
           </div>
+
+          <div class="wb-panel-body space-y-4">
+            <div class="wb-tabs">
+              <button
+                v-if="form.brand !== 'INTERNAL'"
+                type="button"
+                class="wb-tab"
+                :class="{ active: form.validation === 'CLOUD_DNS' }"
+                @click="form.validation = 'CLOUD_DNS'"
+              >
+                云 DNS 自动验证 (推荐)
+              </button>
+              <button
+                v-if="form.brand !== 'INTERNAL'"
+                type="button"
+                class="wb-tab"
+                :class="{ active: form.validation === 'MANUAL_DNS' }"
+                @click="form.validation = 'MANUAL_DNS'"
+              >
+                手动 TXT 验证
+              </button>
+              <button
+                type="button"
+                class="wb-tab"
+                :class="{ active: form.validation === 'AUTO' }"
+                @click="form.validation = 'AUTO'"
+              >
+                {{ form.brand === 'INTERNAL' ? '内置私有 CA 直接签发' : 'HTTP-01 / 自动验证' }}
+              </button>
+            </div>
+
+            <div v-if="form.validation === 'CLOUD_DNS'" class="space-y-2">
+              <div class="flex items-center justify-between">
+                <label class="text-xs font-semibold text-gray-700">
+                  选择已配置的云 DNS API 授权凭证 <span class="text-red-600">*</span>
+                </label>
+                <button type="button" class="wb-row-link" @click="$router.push('/auth')">
+                  管理云 DNS 授权 →
+                </button>
+              </div>
+              <el-select
+                v-model="form.cloudAuthId"
+                placeholder="请选择托管该域名的云厂商 DNS 账号"
+                class="w-full"
+              >
+                <el-option
+                  v-for="auth in authList"
+                  :key="auth.id"
+                  :value="auth.id"
+                  :label="`${auth.name} (${providerLabel(auth.provider)} · ${auth.accesskey})`"
+                />
+              </el-select>
+            </div>
+
+            <div
+              v-else-if="form.validation === 'MANUAL_DNS'"
+              class="text-xs text-gray-600 bg-[#f7f8fa] border border-[#eceef2] rounded-xl p-3"
+            >
+              提交订单后系统将生成 <code class="mono">_acme-challenge</code> TXT 记录值，您可在证书列表打开「DNS 验证向导」检测传播状态并完成签发。
+            </div>
+          </div>
+        </div>
+
+        <div class="wb-panel">
+          <div class="wb-panel-header">
+            <div>
+              <h3 class="wb-panel-title">3. 资产归属与责任人登记</h3>
+              <p class="wb-panel-sub">签发后自动同步至「证书档案」，避免产生无人认领的孤儿证书</p>
+            </div>
+          </div>
+
+          <div class="wb-panel-body grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label class="block text-xs font-semibold text-gray-700 mb-1.5">归属业务项目</label>
+              <el-input v-model="form.project" placeholder="例如：核心网关 / 开放平台" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-gray-700 mb-1.5">运行环境</label>
+              <el-select v-model="form.env" class="w-full">
+                <el-option v-for="(label, code) in ENV_MAP" :key="code" :label="label" :value="code" />
+              </el-select>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-gray-700 mb-1.5">资产责任人</label>
+              <el-input v-model="form.owner" placeholder="例如：陈工 (sre_chen)" />
+            </div>
+            <div class="sm:col-span-3">
+              <label class="block text-xs font-semibold text-gray-700 mb-1.5">运维备注</label>
+              <el-input
+                v-model="form.remark"
+                placeholder="可选：说明关联负载均衡或业务变更窗口要求"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 右侧核对清单 -->
+      <div class="wb-panel lg:sticky lg:top-6">
+        <div class="wb-panel-header">
+          <div>
+            <h3 class="wb-panel-title">申请单核对清单</h3>
+            <p class="wb-panel-sub">提交前确认生命周期策略</p>
+          </div>
+        </div>
+
+        <div class="wb-panel-body space-y-3.5 text-[13px]">
+          <div class="flex justify-between py-1 border-b border-[#f3f4f6]">
+            <span class="text-gray-500">主域名 (CN)</span>
+            <span class="mono font-bold text-[#111827]">{{ parsedDomains[0] || '待输入' }}</span>
+          </div>
+          <div class="flex justify-between py-1 border-b border-[#f3f4f6]">
+            <span class="text-gray-500">SAN 域名数量</span>
+            <span class="mono font-medium text-gray-900">{{ parsedDomains.length }} 个</span>
+          </div>
+          <div class="flex justify-between py-1 border-b border-[#f3f4f6]">
+            <span class="text-gray-500">签发 CA 品牌</span>
+            <span class="font-medium text-gray-900">{{ brandLabel(form.brand) }}</span>
+          </div>
+          <div class="flex justify-between py-1 border-b border-[#f3f4f6]">
+            <span class="text-gray-500">密钥算法</span>
+            <span class="mono font-medium text-gray-900">{{ form.keyType }}</span>
+          </div>
+          <div class="flex justify-between py-1 border-b border-[#f3f4f6]">
+            <span class="text-gray-500">验证方式</span>
+            <span class="font-medium text-gray-900">{{ form.validation }}</span>
+          </div>
+          <div class="flex justify-between py-1 border-b border-[#f3f4f6]">
+            <span class="text-gray-500">归属环境</span>
+            <span class="font-medium text-gray-900">{{ ENV_MAP[form.env] || form.env }}</span>
+          </div>
+
+          <div class="text-xs text-gray-500 bg-[#f7f8fa] border border-[#eceef2] rounded-xl p-3 leading-relaxed">
+            签发成功后自动纳入全生命周期巡检：到期前自动触发续签，关联 Agent 部署节点支持写前备份与 <code class="mono">nginx -t</code> 回滚保护。
+          </div>
+
+          <button
+            type="button"
+            class="wb-btn wb-btn-primary w-full !h-10"
+            :disabled="submitting"
+            @click="submitApply"
+          >
+            {{ submitting ? '正在提交申请...' : '立即发起证书申请' }}
+          </button>
         </div>
       </div>
     </div>
@@ -358,618 +285,142 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import {
-  Plus, Close, Lock, Cloudy, EditPen, ArrowRight, Medal, Key, Document,
-  InfoFilled, QuestionFilled, Warning, Timer, Collection, HomeFilled,
-  SuccessFilled, Star, CircleCheck, UserFilled
-} from '@element-plus/icons-vue'
-import { api } from '../api'
+import { ref, reactive, computed, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
+import { ElMessage } from 'element-plus'
+import { ArrowLeft } from '@element-plus/icons-vue'
+import { call } from '../api'
+import { currentUser } from '../store'
+import { ENV_MAP, brandLabel, providerLabel } from '../utils'
 
 const router = useRouter()
-const submitting = ref(false)
-const domainInput = ref('')
-const auths = ref([])
-const form = ref({
-  name: '',
-  domains: [],
-  brand: 'LETSENCRYPT',
-  keyType: 'RSA',
-  validation: 'MANUAL_DNS',
-  cloudAuthId: null,
-  mainDomain: '',
-  remark: '',
-  orgName: '',
-  orgUnit: ''
-})
+const route = useRoute()
 
-const validationLabel = computed(() => {
-  return form.value.validation === 'MANUAL_DNS' ? '手动 DNS' : '云 DNS 自动'
-})
-
-const brandOptions = [
-  { value: 'LETSENCRYPT', label: "Let's Encrypt", desc: '免费、全球最流行、自动续期', icon: 'Lock', bg: 'linear-gradient(135deg, #1677ff, #4f9dff)', recommend: true },
-  { value: 'ZEROSSL', label: 'ZeroSSL', desc: '免费、支持 90 天有效期', icon: 'Star', bg: 'linear-gradient(135deg, #fa8c16, #ffa940)' },
-  { value: 'GOOGLE', label: 'Google', desc: '谷歌信任的证书颁发机构', icon: 'SuccessFilled', bg: 'linear-gradient(135deg, #22c55e, #4ade80)' },
-  { value: 'LITESSL', label: 'LiteSSL', desc: 'Let\'s Encrypt 替代服务', icon: 'Key', bg: 'linear-gradient(135deg, #a855f7, #c084fc)' },
-  { value: 'INTERNAL', label: '内置 CA', desc: '离线可用，内网测试使用', icon: 'HomeFilled', bg: 'linear-gradient(135deg, #64748b, #94a3b8)' }
+const caOptions = [
+  { value: 'LETSENCRYPT', label: "Let's Encrypt", desc: '90天公信DV · 全球广泛兼容' },
+  { value: 'GOOGLE', label: 'Google Trust', desc: '90天公信DV · 现代边缘网络优选' },
+  { value: 'ZEROSSL', label: 'ZeroSSL', desc: '90天公信DV · ACME 多CA互备' },
+  { value: 'LITESSL', label: 'LiteSSL', desc: '公信DV · 备选亚洲节点链路' },
+  { value: 'INTERNAL', label: '内置私有 CA', desc: '365天内网专用 · 免公网DNS验证' }
 ]
 
-const brands = {
-  INTERNAL: '内置 CA',
-  LETSENCRYPT: "Let's Encrypt",
-  ZEROSSL: 'ZeroSSL',
-  GOOGLE: 'Google',
-  LITESSL: 'LiteSSL'
-}
+const authList = ref([])
+const submitting = ref(false)
+const domainText = ref(route.query.domain ? String(route.query.domain) : '')
 
-const providerMap = {
-  ALIYUN: '阿里云',
-  TENCENT: '腾讯云',
-  CLOUDFLARE: 'Cloudflare',
-  HUAWEI: '华为云',
-  AWS: 'AWS Route53'
-}
+const form = reactive({
+  name: '',
+  keyType: 'ECC',
+  brand: 'LETSENCRYPT',
+  validation: 'CLOUD_DNS',
+  cloudAuthId: null,
+  orgName: '',
+  orgUnit: '',
+  project: '',
+  env: 'prod',
+  owner: currentUser.value.nickname || currentUser.value.username || '',
+  remark: ''
+})
 
-function providerLabel(v) { return providerMap[v] || v }
-function brandLabel(v) { return brands[v] || v }
+const parsedDomains = computed(() => {
+  return Array.from(
+    new Set(
+      domainText.value
+        .split(/[\n,;,\s]+/)
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean)
+    )
+  )
+})
 
-function selectBrand(v) {
-  form.value.brand = v
-  if (v === 'INTERNAL') {
-    form.value.validation = 'MANUAL_DNS'
+const hasWildcard = computed(() => parsedDomains.value.some((d) => d.startsWith('*.')))
+
+function selectBrand(brand) {
+  form.brand = brand
+  if (brand === 'INTERNAL') {
+    form.validation = 'AUTO'
+  } else if (form.validation === 'AUTO' && hasWildcard.value) {
+    form.validation = 'CLOUD_DNS'
   }
 }
 
-function goBack() {
-  if (form.value.domains.length > 0) {
-    ElMessageBox.confirm('已填写的内容将丢失，确认返回？', '提示', { type: 'warning' })
-      .then(() => router.push('/cert'))
-      .catch(() => {})
-  } else {
-    router.push('/cert')
-  }
-}
-
-function addDomain() {
-  const value = (domainInput.value || '').trim().toLowerCase()
-  if (!value) return
-  if (!/^(\*\.)?[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(value)) {
-    ElMessage.warning('域名格式不正确，请输入完整域名（如 example.com）')
-    return
-  }
-  if (form.value.domains.length >= 100) {
-    ElMessage.warning('最多添加 100 个域名')
-    return
-  }
-  if (!form.value.domains.includes(value)) {
-    if (value.startsWith('*.')) {
-      const hasNormal = form.value.domains.some(d => !d.startsWith('*.'))
-      if (hasNormal) {
-        ElMessage.warning('通配符证书不能与普通域名同时申请，请单独提交')
-        return
-      }
-    } else {
-      const hasWildcard = form.value.domains.some(d => d.startsWith('*.'))
-      if (hasWildcard) {
-        ElMessage.warning('普通域名不能与通配符同时申请，请单独提交')
-        return
-      }
-    }
-    form.value.domains.push(value)
-  }
-  domainInput.value = ''
-}
-
-function goAuth() {
-  router.push('/auth')
-}
-
-async function loadAuths() {
+async function loadCloudAuths() {
   try {
-    auths.value = await api('/cloud/auth/list')
-  } catch (e) {
-    auths.value = []
+    authList.value = (await call('/cloud/auth/list')) || []
+    if (authList.value.length > 0 && !form.cloudAuthId) {
+      form.cloudAuthId = authList.value[0].id
+    }
+  } catch {
+    authList.value = []
   }
 }
 
-async function submit() {
-  if (!form.value.domains.length) {
-    ElMessage.warning('请至少输入一个域名')
+async function submitApply() {
+  if (parsedDomains.value.length === 0) {
+    ElMessage.warning('请至少输入一个有效域名')
     return
   }
-  if (form.value.brand === 'INTERNAL') {
-    form.value.validation = 'AUTO'
-  } else if (form.value.validation === 'AUTO') {
-    ElMessage.warning('非内置 CA 需选择 DNS 验证方式')
+  if (hasWildcard.value && form.validation === 'AUTO' && form.brand !== 'INTERNAL') {
+    ElMessage.warning('通配符域名 (*.example.com) 按 ACME 规范必须使用 DNS 验证方式')
     return
   }
-  if (form.value.validation === 'CLOUD_DNS' && !form.value.cloudAuthId) {
-    ElMessage.warning('请选择云 DNS 服务商授权')
+  if (form.validation === 'CLOUD_DNS' && !form.cloudAuthId && form.brand !== 'INTERNAL') {
+    ElMessage.warning('请选择云 DNS 授权账号，或切换为手动 TXT 验证')
     return
   }
 
   submitting.value = true
   try {
-    const cert = await api('/cert/apply', { method: 'POST', body: form.value })
-    if (cert.status === 'ISSUED') {
-      ElMessage.success('🎉 证书签发成功！')
-    } else {
-      ElMessage.success('订单已创建！请前往证书管理查看 DNS 验证指引')
+    const res = await call('/cert/apply', {
+      method: 'POST',
+      body: {
+        domains: parsedDomains.value,
+        mainDomain: parsedDomains.value[0],
+        name: form.name.trim() || parsedDomains.value[0],
+        keyType: form.keyType,
+        brand: form.brand,
+        validation: form.validation,
+        cloudAuthId: form.validation === 'CLOUD_DNS' ? form.cloudAuthId : null,
+        orgName: form.brand === 'INTERNAL' ? form.orgName : undefined,
+        orgUnit: form.brand === 'INTERNAL' ? form.orgUnit : undefined,
+        project: form.project.trim() || undefined,
+        env: form.env,
+        owner: form.owner.trim() || undefined,
+        remark: form.remark.trim() || undefined
+      }
+    })
+
+    if (res?.id && (form.project || form.env || form.owner)) {
+      try {
+        await call('/cert/assetSave', {
+          method: 'POST',
+          body: {
+            id: res.id,
+            project: form.project.trim(),
+            env: form.env,
+            owner: form.owner.trim(),
+            remark: form.remark.trim()
+          }
+        })
+      } catch {
+        // ignore secondary governance save
+      }
     }
-    // 成功后跳转回证书列表
-    setTimeout(() => router.push('/cert'), 800)
-  } catch (e) {
-    ElMessage.error(e.message)
+
+    if (res?.status === 'WAIT_DNS') {
+      ElMessage.success('订单已创建，请在证书列表点击「DNS 验证向导」配置 TXT 记录')
+    } else {
+      ElMessage.success('证书签发成功，已自动纳入资产档案')
+    }
+    router.push('/cert')
+  } catch {
+    // handled in call()
   } finally {
     submitting.value = false
   }
 }
 
 onMounted(() => {
-  loadAuths()
+  loadCloudAuths()
 })
 </script>
-
-<style scoped>
-.apply-page {
-  padding: 0;
-}
-
-.page-header {
-  margin-bottom: 20px;
-}
-
-.header-content {
-  font-size: 14px;
-}
-
-.apply-container {
-  display: grid;
-  grid-template-columns: 1fr 320px;
-  gap: 20px;
-  align-items: flex-start;
-}
-
-/* ========== 主表单区域 ========== */
-.apply-main {
-  background: #fff;
-  border-radius: 12px;
-  padding: 24px 32px;
-  border: 1px solid #f0f2f5;
-}
-
-.apply-form {
-  display: flex;
-  flex-direction: column;
-  gap: 28px;
-}
-
-.form-section {
-  padding-bottom: 24px;
-  border-bottom: 1px dashed #f0f2f5;
-}
-.form-section:last-child {
-  border-bottom: none;
-  padding-bottom: 0;
-}
-
-.section-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 15px;
-  font-weight: 600;
-  color: #1f2329;
-  margin-bottom: 14px;
-}
-
-.section-icon {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  background: linear-gradient(135deg, #1677ff22, #4f9dff22);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #1677ff;
-  font-size: 14px;
-}
-
-.section-title .required {
-  color: #f56c6c;
-}
-
-.form-hint {
-  margin-top: 10px;
-  font-size: 12px;
-  color: #8a919f;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-/* ========== 域名输入 ========== */
-.domain-input-area {
-  width: 100%;
-}
-
-.domain-tags {
-  margin-top: 12px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.domain-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px 6px 14px;
-  border-radius: 20px;
-  background: #f5f7fa;
-  border: 1px solid #e4e7ed;
-  font-size: 13px;
-  color: #303133;
-  transition: all 0.2s;
-}
-.domain-tag:hover {
-  border-color: #1677ff;
-  background: #e6f4ff;
-}
-.domain-tag.wildcard {
-  background: #fff7e6;
-  border-color: #ffd591;
-  color: #d46b08;
-}
-.domain-tag-text {
-  font-family: 'SFMono-Regular', Consolas, monospace;
-}
-.domain-tag-close {
-  cursor: pointer;
-  color: #c0c4cc;
-  font-size: 14px;
-  border-radius: 50%;
-  padding: 2px;
-  transition: all 0.15s;
-}
-.domain-tag-close:hover {
-  background: #f56c6c;
-  color: #fff;
-}
-
-/* ========== 验证方式 ========== */
-.validation-tabs {
-  display: flex;
-  gap: 12px;
-}
-
-.validation-tab {
-  flex: 1;
-  padding: 18px;
-  border: 2px solid #ebf0fa;
-  border-radius: 12px;
-  cursor: pointer;
-  transition: all 0.2s;
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
-  background: #fafbfc;
-}
-.validation-tab:hover {
-  border-color: #4f9dff;
-  background: #fff;
-}
-.validation-tab.active {
-  border-color: #1677ff;
-  background: linear-gradient(135deg, #e6f4ff, #ffffff);
-  box-shadow: 0 2px 8px rgba(22, 119, 255, 0.1);
-}
-
-.tab-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #1677ff, #4f9dff);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 20px;
-  flex-shrink: 0;
-}
-.validation-tab.active .tab-icon {
-  background: linear-gradient(135deg, #1677ff, #4096ff);
-}
-
-.tab-title {
-  font-size: 14px;
-  font-weight: 500;
-  color: #1f2329;
-}
-.tab-hint {
-  font-size: 12px;
-  color: #8a919f;
-  margin-top: 4px;
-  line-height: 1.5;
-}
-
-.validation-content {
-  margin-top: 14px;
-}
-
-/* ========== 手动 DNS 引导步骤 ========== */
-.dns-guide-steps {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 18px;
-  background: #f9fafb;
-  border-radius: 10px;
-  border: 1px solid #f0f2f5;
-}
-
-.step {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  flex: 1;
-}
-
-.step-num {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: #1677ff;
-  color: #fff;
-  font-size: 13px;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.step-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: #1f2329;
-}
-
-.step-desc {
-  font-size: 12px;
-  color: #8a919f;
-  margin-top: 2px;
-  line-height: 1.4;
-}
-
-.step-arrow {
-  color: #c0c4cc;
-  font-size: 16px;
-  flex-shrink: 0;
-}
-
-/* ========== 证书品牌 ========== */
-.brand-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 10px;
-}
-
-.brand-card {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 14px;
-  border: 2px solid #ebf0fa;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: all 0.2s;
-  background: #fafbfc;
-  position: relative;
-}
-.brand-card:hover {
-  border-color: #4f9dff;
-  background: #fff;
-}
-.brand-card.active {
-  border-color: #1677ff;
-  background: #e6f4ff;
-  box-shadow: 0 2px 8px rgba(22, 119, 255, 0.08);
-}
-
-.brand-radio {
-  width: 18px;
-  height: 18px;
-  border: 2px solid #c0c4cc;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  transition: all 0.2s;
-}
-.brand-card.active .brand-radio {
-  border-color: #1677ff;
-}
-.radio-inner {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #1677ff;
-}
-
-.brand-icon-wrap {
-  flex-shrink: 0;
-}
-.brand-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  font-size: 18px;
-}
-
-.brand-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.brand-name {
-  font-size: 14px;
-  font-weight: 500;
-  color: #1f2329;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.brand-tag {
-  font-size: 11px;
-}
-
-.brand-desc {
-  font-size: 12px;
-  color: #8a919f;
-  margin-top: 2px;
-}
-
-/* ========== 加密算法 ========== */
-.algo-cards {
-  display: flex;
-  gap: 12px;
-}
-
-.algo-card {
-  flex: 1;
-  padding: 16px 20px;
-  border: 2px solid #ebf0fa;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: all 0.2s;
-  background: #fafbfc;
-  text-align: center;
-}
-.algo-card:hover {
-  border-color: #4f9dff;
-}
-.algo-card.active {
-  border-color: #1677ff;
-  background: #e6f4ff;
-}
-
-.algo-name {
-  font-size: 18px;
-  font-weight: 600;
-  color: #1f2329;
-}
-.algo-spec {
-  font-size: 12px;
-  color: #8a919f;
-  margin-top: 4px;
-}
-.algo-badge {
-  display: inline-block;
-  margin-top: 8px;
-  padding: 2px 10px;
-  background: rgba(22, 119, 255, 0.1);
-  color: #1677ff;
-  font-size: 11px;
-  border-radius: 10px;
-}
-
-/* ========== 右侧边栏 ========== */
-.apply-sidebar {
-  position: sticky;
-  top: 20px;
-}
-
-.sidebar-card {
-  background: #fff;
-  border-radius: 12px;
-  padding: 20px;
-  border: 1px solid #f0f2f5;
-  margin-bottom: 16px;
-}
-
-.sidebar-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: #1f2329;
-  margin-bottom: 16px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.summary-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-bottom: 20px;
-}
-
-.summary-item {
-  display: flex;
-  justify-content: space-between;
-  font-size: 13px;
-}
-.summary-label {
-  color: #8a919f;
-}
-.summary-value {
-  color: #1f2329;
-  font-weight: 500;
-}
-
-.sidebar-actions {
-  border-top: 1px solid #f0f2f5;
-  padding-top: 16px;
-}
-
-.tips-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.tip-item {
-  display: flex;
-  gap: 10px;
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-.tip-icon {
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
-  background: #fff7e6;
-  color: #fa8c16;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.tip-text {
-  color: #606266;
-}
-.tip-text strong {
-  color: #1f2329;
-}
-
-.sub-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.sub-label {
-  font-size: 12px;
-  color: #8a919f;
-}
-</style>
